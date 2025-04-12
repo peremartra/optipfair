@@ -1,0 +1,2 @@
+[console_scripts]
+optipfair = optipfair.cli:cli
