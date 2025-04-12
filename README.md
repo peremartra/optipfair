@@ -124,17 +124,17 @@ The expansion rate approach is often more intuitive when comparing across differ
 If you use OptiPFair in your research, please cite:
 
 ```
-@software{optipfair2023,
-  author = {Your Name},
+@software{optipfair2025,
+  author = {Pere Martra},
   title = {OptiPFair: A Library for Structured Pruning of Large Language Models},
-  year = {2023},
+  year = {2025},
   url = {https://github.com/yourusername/optipfair}
 }
 ```
 
 ## License
 
-MIT License
+Apache 2.0
 
 ## Contributing
 
