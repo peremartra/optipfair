@@ -91,14 +91,14 @@ OptiPFair supports three methods for calculating neuron importance:
 
 ## Documentation
 
-Complete documentation is available at [https://yourusername.github.io/optipfair/](https://yourusername.github.io/optipfair/).
+Complete documentation is available at [https://peremartra.github.io/optipfair/](https://peremartra.github.io/optipfair/).
 
 ## Supported Models
 
-OptiPFair is designed to work with transformer-based language models that use GLU architecture in their MLP layers, including:
+At his moment, OptiPFair is designed to work with transformer-based language models that use GLU architecture in their MLP layers, including:
 
-- LLaMA family (LLaMA, LLaMA-2, LLaMA-3)
-- Mistral models
+- LLaMA family (LLaMA, LLaMA-2, LLaMA-3, )
+- Mistral models, QWeN, Gemma...
 - And other models with similar GLU architecture
 
 ## Expansion Rate vs Pruning Percentage
@@ -115,9 +115,8 @@ The expansion rate approach is often more intuitive when comparing across differ
 
 - Support for attention layer pruning
 - Whole block pruning
-- Quantization-aware pruning
 - Integrated evaluation benchmarks
-- Iterative pruning capabilities
+- Bias visualizations. 
 
 ## Citation
 
