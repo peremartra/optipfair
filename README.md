@@ -1,6 +1,6 @@
 # OptiPFair
 
-![Generate Syntetic Conversations](/images/optiPfair.png)
+![Optimize LLMs](/images/optiPfair.png)
 
 <div align="center">
     <h3>
