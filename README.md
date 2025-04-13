@@ -16,7 +16,7 @@ Key features:
 ## Installation
 
 ```bash
-# From PyPI (not yet available)
+# From PyPI 
 pip install optipfair
 
 # From source
