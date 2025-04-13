@@ -1,5 +1,13 @@
 # OptiPFair
 
+![Generate Syntetic Conversations](/images/wizardsdata_banner.png)
+
+<div align="center">
+    <h3>
+        <a href="https://peremartra.github.io/optipfair/" target="_blank">DOCUMENTATION</a> | 
+    </h3>
+</div>
+
 A Python library for structured pruning of large language models, with a focus on GLU architectures.
 
 ## Overview
