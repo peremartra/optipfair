@@ -12,7 +12,7 @@ from transformers import PreTrainedModel
 from .pruning.mlp_glu import prune_model_mlp_glu
 from .pruning.utils import get_pruning_statistics
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # Configure logging
 logging.basicConfig(
