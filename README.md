@@ -1,6 +1,6 @@
 # OptiPFair
 
-![Generate Syntetic Conversations](/images/wizardsdata_banner.png)
+![Generate Syntetic Conversations](/images/optiPfair.png)
 
 <div align="center">
     <h3>
