@@ -91,7 +91,10 @@ def prune_neuron_pairs(
         new_down_proj: Pruned down_proj layer
         k: New intermediate size after pruning
     """
-    # Extract the weights from the MLP layers
+    # Store original dtype for later use
+    original_dtype = mlp.gate_proj.weight.dtype
+    
+    # Extract the weights from the MLP layers and convert to float for calculations
     gate_weight = mlp.gate_proj.weight.data.float()
     up_weight = mlp.up_proj.weight.data.float()
     
@@ -112,22 +115,23 @@ def prune_neuron_pairs(
     indices_to_keep = indices_to_keep.sort().values
     
     # Create new layers with reduced dimensions
-    new_gate_proj = nn.Linear(mlp.gate_proj.in_features, k, bias=mlp.gate_proj.bias is not None)
-    new_up_proj = nn.Linear(mlp.up_proj.in_features, k, bias=mlp.up_proj.bias is not None)
-    new_down_proj = nn.Linear(k, mlp.down_proj.out_features, bias=mlp.down_proj.bias is not None)
+    device = next(mlp.parameters()).device
+    new_gate_proj = nn.Linear(mlp.gate_proj.in_features, k, bias=mlp.gate_proj.bias is not None).to(device)
+    new_up_proj = nn.Linear(mlp.up_proj.in_features, k, bias=mlp.up_proj.bias is not None).to(device)
+    new_down_proj = nn.Linear(k, mlp.down_proj.out_features, bias=mlp.down_proj.bias is not None).to(device)
     
-    # Copy selected weights to the new layers
-    new_gate_proj.weight.data = gate_weight[indices_to_keep, :]
+    # Copy selected weights to the new layers and convert back to original dtype
+    new_gate_proj.weight.data = gate_weight[indices_to_keep, :].to(original_dtype)
     if mlp.gate_proj.bias is not None:
-        new_gate_proj.bias.data = mlp.gate_proj.bias.data[indices_to_keep]
+        new_gate_proj.bias.data = mlp.gate_proj.bias.data[indices_to_keep].to(original_dtype)
     
-    new_up_proj.weight.data = up_weight[indices_to_keep, :]
+    new_up_proj.weight.data = up_weight[indices_to_keep, :].to(original_dtype)
     if mlp.up_proj.bias is not None:
-        new_up_proj.bias.data = mlp.up_proj.bias.data[indices_to_keep]
+        new_up_proj.bias.data = mlp.up_proj.bias.data[indices_to_keep].to(original_dtype)
     
-    new_down_proj.weight.data = mlp.down_proj.weight.data[:, indices_to_keep]
+    new_down_proj.weight.data = mlp.down_proj.weight.data[:, indices_to_keep].to(original_dtype)
     if mlp.down_proj.bias is not None:
-        new_down_proj.bias.data = mlp.down_proj.bias.data.clone()
+        new_down_proj.bias.data = mlp.down_proj.bias.data.clone().to(original_dtype)
     
     return new_gate_proj, new_up_proj, new_down_proj, k
 
