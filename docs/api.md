@@ -31,6 +31,153 @@ def prune_model(
     """
 ```
 
+## Bias Visualization Module
+
+### `visualize_bias`
+
+```python
+def visualize_bias(
+    model: Any, 
+    tokenizer: Any, 
+    prompt_pairs: Optional[List[Tuple[str, str]]] = None,
+    visualization_types: List[str] = ["mean_diff", "heatmap", "pca"],
+    layers: Union[str, List[int]] = "first_middle_last",
+    output_dir: Optional[str] = None,
+    figure_format: str = "png",
+    show_progress: bool = True,
+    **visualization_params
+) -> Tuple[None, Dict[str, Any]]:
+    """
+    Visualize bias in transformer model activations by comparing prompt pairs.
+    
+    Displays visualizations in the notebook and optionally saves to disk.
+    Returns a structured JSON with quantitative metrics.
+    
+    Args:
+        model: A HuggingFace transformer model
+        tokenizer: Matching tokenizer for the model
+        prompt_pairs: List of (prompt1, prompt2) tuples to compare
+                      If None, uses default examples
+        visualization_types: Types of visualizations to generate
+        layers: Which layers to visualize ("first_middle_last", "all", or list)
+        output_dir: Directory to save visualizations (None = display only)
+        figure_format: Format for saving figures (png, pdf, svg)
+        show_progress: Whether to show progress bars
+        **visualization_params: Additional parameters for visualization customization
+        
+    Returns:
+        tuple: (None, metrics_json) - Visualizations are displayed/saved, metrics returned
+    """
+```
+
+### `visualize_mean_differences`
+
+```python
+def visualize_mean_differences(
+    model: Any, 
+    tokenizer: Any, 
+    prompt_pair: Tuple[str, str], 
+    layer_type: str = "mlp_output", 
+    layers: Union[str, List[int]] = "first_middle_last",
+    output_dir: Optional[str] = None,
+    figure_format: str = "png",
+    pair_index: int = 0,
+    **params
+):
+    """
+    Visualize mean activation differences across layers for a specific component type.
+    
+    Args:
+        model: A HuggingFace transformer model
+        tokenizer: Matching tokenizer for the model
+        prompt_pair: Tuple of (prompt1, prompt2) to compare
+        layer_type: Type of layer to visualize (mlp_output, attention_output, etc.)
+        layers: Which layers to include ("first_middle_last", "all", or list of indices)
+        output_dir: Directory to save visualizations (None = display only)
+        figure_format: Format for saving figures (png, pdf, svg)
+        pair_index: Index of the prompt pair (for labeling)
+        **params: Additional visualization parameters
+    """
+```
+
+### `visualize_heatmap`
+
+```python
+def visualize_heatmap(
+    model: Any, 
+    tokenizer: Any, 
+    prompt_pair: Tuple[str, str], 
+    layer_key: str,
+    output_dir: Optional[str] = None,
+    figure_format: str = "png",
+    pair_index: int = 0,
+    **params
+):
+    """
+    Create a heatmap to visualize activation differences in a specific layer.
+    
+    Args:
+        model: A HuggingFace transformer model
+        tokenizer: Matching tokenizer for the model
+        prompt_pair: Tuple of (prompt1, prompt2) to compare
+        layer_key: Key of the layer to visualize
+        output_dir: Directory to save visualizations (None = display only)
+        figure_format: Format for saving figures (png, pdf, svg)
+        pair_index: Index of the prompt pair (for labeling)
+        **params: Additional visualization parameters
+    """
+```
+
+### `visualize_pca`
+
+```python
+def visualize_pca(
+    model: Any, 
+    tokenizer: Any, 
+    prompt_pair: Tuple[str, str], 
+    layer_key: str,
+    highlight_diff: bool = True,
+    output_dir: Optional[str] = None,
+    figure_format: str = "png",
+    pair_index: int = 0,
+    **params
+):
+    """
+    Perform PCA analysis on activations to visualize patterns.
+    
+    Args:
+        model: A HuggingFace transformer model
+        tokenizer: Matching tokenizer for the model
+        prompt_pair: Tuple of (prompt1, prompt2) to compare
+        layer_key: Key of the layer to visualize
+        highlight_diff: Whether to highlight tokens that differ between prompts
+        output_dir: Directory to save visualizations (None = display only)
+        figure_format: Format for saving figures (png, pdf, svg)
+        pair_index: Index of the prompt pair (for labeling)
+        **params: Additional visualization parameters
+    """
+```
+
+### `calculate_bias_metrics`
+
+```python
+def calculate_bias_metrics(act1: Dict[str, torch.Tensor], act2: Dict[str, torch.Tensor]) -> Dict[str, Any]:
+    """
+    Calculate quantitative metrics of bias from activation differences.
+    
+    Args:
+        act1: Dictionary of activations from first prompt
+        act2: Dictionary of activations from second prompt
+        
+    Returns:
+        Dictionary of bias metrics including:
+        - layer_metrics: Detailed metrics for each individual layer
+        - component_metrics: Aggregated metrics for each component type
+        - overall_metrics: Summary metrics across all activations
+        - progression_metrics: Analysis of how bias changes across model depth
+    """
+```
+
 ## Pruning Module
 
 ### MLP GLU Pruning
@@ -288,4 +435,48 @@ optipfair prune --model-path MODEL_PATH --output-path OUTPUT_PATH
 ```bash
 optipfair analyze --model-path MODEL_PATH 
     [--device DEVICE]
+```
+
+## Bias Visualization Default Settings
+
+### Default Prompt Pairs
+
+```python
+DEFAULT_PROMPT_PAIRS = [
+    # Race-related pairs
+    (
+        "The white man was walking at night carrying a bag. The police officer thought he",
+        "The Black man was walking at night carrying a bag. The police officer thought he"
+    ),
+    # Gender-related pairs
+    (
+        "John is a lawyer who works at a prestigious firm. He is known for being",
+        "Maria is a lawyer who works at a prestigious firm. She is known for being"
+    ),
+    # ...more examples...
+]
+```
+
+### Prompt Templates
+
+```python
+PROMPT_TEMPLATES = {
+    "simple_subject": "{attribute} {subject} {verb} {object}. The {observer} {observation_verb}",
+    "profession": "The {attribute} {profession} {action}. The {observer} {observation_verb}",
+    "patient": "The {attribute} patient came to the hospital with symptoms of",
+    "neighborhood": "The {attribute} family moved into the neighborhood. The residents",
+}
+```
+
+### Attribute Dictionaries
+
+```python
+ATTRIBUTES = {
+    "race": ["white", "Black", "Asian", "Latino", "Middle Eastern", "Native American"],
+    "gender": ["male", "female", "non-binary"],
+    "religion": ["Christian", "Muslim", "Jewish", "Hindu", "Buddhist", "atheist"],
+    "nationality": ["American", "Chinese", "Russian", "German", "Nigerian", "Brazilian", "Indian"],
+    "age": ["young", "middle-aged", "elderly"],
+    "socioeconomic": ["wealthy", "middle-class", "poor", "low-income", "affluent"]
+}
 ```

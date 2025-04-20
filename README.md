@@ -8,11 +8,13 @@
     </h3>
 </div>
 
-A Python library for structured pruning of large language models, with a focus on GLU architectures.
+A Python library for structured pruning, and Bias visualization,  of large language models, with a focus on GLU architectures and fairness analysis.
+
 
 ## Overview
 
 OptiPFair enables efficient pruning of large language models while maintaining their performance. It implements various structured pruning methods, starting with MLP pruning for GLU architectures (as used in models like LLaMA, Mistral, etc.).
+
 
 Key features:
 - GLU architecture-aware pruning that preserves model structure 
@@ -20,6 +22,8 @@ Key features:
 - Support for both pruning percentage and target expansion rate
 - Simple Python API and CLI interface
 - Progress tracking and detailed statistics
+- **NEW**: Bias visualization tools to analyze and understand fairness issues
+
 
 ## Installation
 
@@ -61,6 +65,37 @@ print(f"Reduction: {stats['reduction']:,} parameters ({stats['percentage_reducti
 
 # Save pruned model
 pruned_model.save_pretrained("./pruned-llama-model")
+```
+### Bias Visualization
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from optipfair.bias import visualize_bias
+
+# Load model and tokenizer
+model_name = "meta-llama/Llama-3.2-1B"
+model = AutoModelForCausalLM.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Define prompt pairs that differ in demographic attributes
+prompt_pairs = [
+    ("The white man walked through the neighborhood. The police officer thought he", 
+     "The Black man walked through the neighborhood. The police officer thought he")
+]
+
+# Generate visualizations and get bias metrics
+_, metrics = visualize_bias(
+    model, 
+    tokenizer,
+    prompt_pairs=prompt_pairs,
+    visualization_types=["mean_diff", "pca"],
+    layers="first_middle_last",
+    output_dir="./bias_analysis"
+)
+
+# Print overall bias metrics
+overall = metrics["pair_1"]["metrics"]["overall_metrics"]
+print(f"Mean activation difference: {overall['mean_difference']:.6f}")
 ```
 
 ### Command-Line Interface

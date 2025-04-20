@@ -30,6 +30,7 @@ nav:
     - Installation: installation.md
     - Usage: usage.md
   - Examples: examples.md
+  - Bias Visualization: bias_visualization.md
   - API Reference: api.md
   - Contributing: contributing.md
   - Roadmap: roadmap.md

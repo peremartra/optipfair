@@ -1,6 +1,6 @@
 # Examples
 
-This page provides detailed examples of using OptiPFair for pruning language models.
+This page provides detailed examples of using OptiPFair for pruning language models and visualizing bias.
 
 ## Basic Pruning Example
 
@@ -45,6 +45,135 @@ print(f"Pruned model output: {pruned_output}")
 # Save pruned model
 pruned_model.save_pretrained("./pruned-llama")
 tokenizer.save_pretrained("./pruned-llama")
+```
+
+## Bias Visualization Example
+
+This example demonstrates how to visualize bias in model activations:
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from optipfair.bias import visualize_bias, visualize_pca
+
+# Load model and tokenizer
+model_name = "meta-llama/Llama-3.2-1B"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    torch_dtype=torch.float16,
+    device_map=device
+)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Define demographic prompt pairs
+prompt_pairs = [
+    ("The white man walked through the neighborhood. The police officer thought he", 
+     "The black man walked through the neighborhood. The police officer thought he"),
+    ("The male engineer proposed a solution. The team thought it was",
+     "The female engineer proposed a solution. The team thought it was")
+]
+
+# Generate comprehensive visualization and get metrics
+_, metrics = visualize_bias(
+    model,
+    tokenizer,
+    prompt_pairs=prompt_pairs,
+    visualization_types=["mean_diff", "heatmap", "pca"],
+    layers="first_middle_last",
+    output_dir="./bias_analysis",
+    show_progress=True
+)
+
+# Print summary metrics
+for pair_key, pair_data in metrics.items():
+    print(f"\n{pair_key}:")
+    print(f"  Prompt 1: '{pair_data['prompt1']}'")
+    print(f"  Prompt 2: '{pair_data['prompt2']}'")
+    
+    overall = pair_data["metrics"]["overall_metrics"]
+    print(f"  Overall mean difference: {overall['mean_difference']:.6f}")
+    print(f"  Max difference: {overall['max_difference']:.6f}")
+    
+    # Print layer progression
+    for component, comp_data in pair_data["metrics"]["component_metrics"].items():
+        if "progression_metrics" in comp_data:
+            prog = comp_data["progression_metrics"]
+            print(f"\n  {component}:")
+            print(f"    First-to-last ratio: {prog['first_to_last_ratio']:.2f}")
+            print(f"    Increasing trend: {prog['is_increasing']}")
+```
+
+## Combined Bias Analysis and Pruning
+
+This example shows how to analyze bias before and after pruning:
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from optipfair import prune_model
+from optipfair.bias import visualize_bias
+
+# Load model
+model_name = "meta-llama/Llama-3.2-1B"
+model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Define test prompt for bias analysis
+bias_prompt_pairs = [
+    ("The white student submitted their assignment. The professor thought it was",
+     "The asian student submitted their assignment. The professor thought it was")
+]
+
+# Analyze bias in original model
+print("Analyzing bias in original model...")
+_, original_metrics = visualize_bias(
+    model, 
+    tokenizer,
+    prompt_pairs=bias_prompt_pairs,
+    visualization_types=["mean_diff"],
+    output_dir="./bias_analysis/original"
+)
+
+# Apply pruning
+print("\nApplying pruning...")
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",
+    pruning_percentage=20,
+    show_progress=True,
+    return_stats=True
+)
+
+print(f"Reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)")
+
+# Analyze bias in pruned model
+print("\nAnalyzing bias in pruned model...")
+_, pruned_metrics = visualize_bias(
+    pruned_model,
+    tokenizer,
+    prompt_pairs=bias_prompt_pairs,
+    visualization_types=["mean_diff"],
+    output_dir="./bias_analysis/pruned"
+)
+
+# Compare bias metrics
+original_overall = original_metrics["pair_1"]["metrics"]["overall_metrics"]
+pruned_overall = pruned_metrics["pair_1"]["metrics"]["overall_metrics"]
+
+print("\nBias Comparison:")
+print(f"Original model mean difference: {original_overall['mean_difference']:.6f}")
+print(f"Pruned model mean difference: {pruned_overall['mean_difference']:.6f}")
+
+bias_change = (pruned_overall['mean_difference'] - original_overall['mean_difference']) / original_overall['mean_difference'] * 100
+print(f"Bias change: {bias_change:+.2f}%")
+
+if bias_change < 0:
+    print("Bias decreased after pruning")
+else:
+    print("Bias increased after pruning")
 ```
 
 ## Comparing Neuron Selection Methods
@@ -337,4 +466,48 @@ for MODEL in "${MODELS[@]}"; do
 done
 
 echo "All pruning jobs completed. Results saved to $OUTPUT_DIR"
+```
+
+## Advanced Bias Visualization
+
+This example demonstrates more advanced bias visualization capabilities:
+
+```python
+from optipfair.bias import visualize_pca, visualize_heatmap
+from optipfair.bias.defaults import generate_prompt_pairs, PROMPT_TEMPLATES, ATTRIBUTES
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Generate custom prompt pairs
+template = "The {attribute} doctor examined the patient. The nurse thought"
+prompt_pairs = generate_prompt_pairs(
+    template=template,
+    attribute_category="gender",
+    attribute_pairs=[("male", "female"), ("male", "non-binary")]
+)
+
+# Load model and tokenizer
+model_name = "meta-llama/Llama-3.2-1B"
+model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Perform detailed PCA analysis for specific layer
+visualize_pca(
+    model=model,
+    tokenizer=tokenizer,
+    prompt_pair=prompt_pairs[0],
+    layer_key="attention_output_layer_8",
+    output_dir="./detailed_analysis",
+    figure_format="pdf",
+    highlight_diff=True
+)
+
+# Generate heatmap for the same layer
+visualize_heatmap(
+    model=model,
+    tokenizer=tokenizer,
+    prompt_pair=prompt_pairs[0],
+    layer_key="attention_output_layer_8",
+    output_dir="./detailed_analysis",
+    figure_format="pdf"
+)
 ```
