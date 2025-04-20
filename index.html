@@ -20,7 +20,7 @@
       
       
       <link rel="icon" href="assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.11">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.12">
     
     
       
@@ -28,7 +28,7 @@
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.4af4bdda.min.css">
+      <link rel="stylesheet" href="assets/stylesheets/main.2afb09e1.min.css">
       
         
         <link rel="stylesheet" href="assets/stylesheets/palette.06af60db.min.css">
@@ -257,6 +257,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="vias_visualization/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Bias Visualization
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="api/" class="md-tabs__link">
         
   
@@ -415,6 +434,15 @@
   <a href="#why-prune-language-models" class="md-nav__link">
     <span class="md-ellipsis">
       Why Prune Language Models?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-analyze-bias-in-language-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why Analyze Bias in Language Models?
     </span>
   </a>
   
@@ -589,6 +617,28 @@
   
   
     <li class="md-nav__item">
+      <a href="vias_visualization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Bias Visualization
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="api/" class="md-nav__link">
         
   
@@ -668,7 +718,7 @@
 
 
 <h1 id="optipfair-documentation">OptiPFair Documentation<a class="headerlink" href="#optipfair-documentation" title="Permanent link">&para;</a></h1>
-<p>Welcome to the OptiPFair documentation. OptiPFair is a Python library for structured pruning of large language models, with a focus on GLU architectures.</p>
+<p>Welcome to the OptiPFair documentation. OptiPFair is a Python library for structured pruning of large language models, with a focus on GLU architectures and fairness analysis.</p>
 <h2 id="why-prune-language-models">Why Prune Language Models?<a class="headerlink" href="#why-prune-language-models" title="Permanent link">&para;</a></h2>
 <p>Pruning helps to reduce the size and computational requirements of large language models, making them:</p>
 <ul>
@@ -676,18 +726,29 @@
 <li><strong>More efficient</strong> in terms of memory usage</li>
 <li><strong>Easier to deploy</strong> on resource-constrained devices</li>
 </ul>
+<h2 id="why-analyze-bias-in-language-models">Why Analyze Bias in Language Models?<a class="headerlink" href="#why-analyze-bias-in-language-models" title="Permanent link">&para;</a></h2>
+<p>Understanding bias in language models is crucial for:</p>
+<ul>
+<li><strong>Ensuring fairness</strong> in AI applications</li>
+<li><strong>Identifying problematic patterns</strong> in model behavior</li>
+<li><strong>Developing mitigation strategies</strong> through pruning</li>
+<li><strong>Making informed decisions</strong> about model deployment</li>
+</ul>
 <h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>GLU Architecture-Aware Pruning</strong>: Maintains the paired nature of gate_proj and up_proj layers</li>
 <li><strong>Multiple Neuron Selection Methods</strong>: MAW, VOW, and PON for different pruning strategies</li>
 <li><strong>Flexible Pruning Targets</strong>: Support for both pruning percentage and target expansion rate</li>
+<li><strong>Bias Visualization Tools</strong>: Comprehensive analysis of how models process demographic attributes</li>
+<li><strong>Quantitative Bias Metrics</strong>: Numeric measurements for consistent evaluation</li>
 <li><strong>Simple API and CLI</strong>: Easy to use interfaces for Python and command line</li>
 <li><strong>Progress Tracking</strong>: Visual progress bars and detailed statistics</li>
 </ul>
 <h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="installation/">Installation</a>: How to install OptiPFair</li>
-<li><a href="usage/">Usage</a>: Basic usage examples</li>
+<li><a href="usage/">Usage</a>: Basic usage examples for pruning</li>
+<li><a href="bias_visualization.md">Bias Visualization</a>: Analyzing fairness in transformers</li>
 <li><a href="api/">API Reference</a>: Detailed API documentation</li>
 <li><a href="examples/">Examples</a>: In-depth examples and tutorials</li>
 </ul>
@@ -704,7 +765,7 @@
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  author = {Pere Martra},
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  title = {OptiPFair: A Library for Structured Pruning of Large Language Models},
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  year = {2025},
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  url = {https://github.com/yourusername/optipfair}
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  url = {https://github.com/peremartra/optipfair}
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>}
 </code></pre></div>
 
