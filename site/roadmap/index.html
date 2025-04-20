@@ -20,7 +20,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.11">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.12">
     
     
       
@@ -28,7 +28,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.4af4bdda.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.2afb09e1.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
@@ -243,6 +243,25 @@
     
   
   Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../vias_visualization/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Bias Visualization
 
       </a>
     </li>
@@ -502,6 +521,28 @@
   
   
     <li class="md-nav__item">
+      <a href="../vias_visualization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Bias Visualization
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -606,6 +647,15 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#version-013-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version 0.1.3 (Released)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#version-020" class="md-nav__link">
     <span class="md-ellipsis">
       Version 0.2.0
@@ -618,24 +668,6 @@
   <a href="#version-030" class="md-nav__link">
     <span class="md-ellipsis">
       Version 0.3.0
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#version-040" class="md-nav__link">
-    <span class="md-ellipsis">
-      Version 0.4.0
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#version-050" class="md-nav__link">
-    <span class="md-ellipsis">
-      Version 0.5.0
     </span>
   </a>
   
@@ -655,6 +687,24 @@
   
     <nav class="md-nav" aria-label="Long-term Goals (6+ months)">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#version-040" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version 0.4.0
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version-050" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version 0.5.0
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#version-100" class="md-nav__link">
@@ -709,11 +759,18 @@
 <h1 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">&para;</a></h1>
 <p>This document outlines the planned features and improvements for OptiPFair.</p>
 <h2 id="mid-term-goals-0-6-months">Mid-term Goals (0-6 months)<a class="headerlink" href="#mid-term-goals-0-6-months" title="Permanent link">&para;</a></h2>
+<h3 id="version-013-released">Version 0.1.3 (Released)<a class="headerlink" href="#version-013-released" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Bias Visualization</strong>: Implemented tools for visualizing bias in transformer models ✓</li>
+<li>Mean activation differences across layers</li>
+<li>Heatmap visualizations for detailed pattern analysis</li>
+<li>PCA analysis for dimensional reduction</li>
+<li>Quantitative bias metrics</li>
+</ul>
 <h3 id="version-020">Version 0.2.0<a class="headerlink" href="#version-020" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Attention Mechanism Pruning</strong>: Implement pruning techniques for attention layers</li>
-<li><strong>Transformer Block Pruning</strong>: Implement pruning techniques for entire transformer blocks</li>
-<li><strong>Bias Visualization</strong>: Implement visualizations for Bias in pair of prompts</li>
+<li><strong>Transformer Block Pruning</strong>: Implement pruning techniques for entire transformer </li>
 </ul>
 <h3 id="version-030">Version 0.3.0<a class="headerlink" href="#version-030" title="Permanent link">&para;</a></h3>
 <ul>
@@ -721,6 +778,7 @@
 <li><strong>NO GLU Models</strong>: Implement pruning techniques for older models (no GLU)</li>
 <li><strong>Improved Documentation</strong>: Add more examples and tutorials</li>
 </ul>
+<h2 id="long-term-goals-6-months">Long-term Goals (6+ months)<a class="headerlink" href="#long-term-goals-6-months" title="Permanent link">&para;</a></h2>
 <h3 id="version-040">Version 0.4.0<a class="headerlink" href="#version-040" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Configuration Presets</strong>: Provide optimized pruning configurations for different model families</li>
@@ -730,7 +788,6 @@
 <ul>
 <li><strong>Fairness prunning</strong>: consider bias in pruning. </li>
 </ul>
-<h2 id="long-term-goals-6-months">Long-term Goals (6+ months)<a class="headerlink" href="#long-term-goals-6-months" title="Permanent link">&para;</a></h2>
 <h3 id="version-100">Version 1.0.0<a class="headerlink" href="#version-100" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Distributed Pruning</strong>: Support for pruning very large models across multiple GPUs</li>

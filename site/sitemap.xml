@@ -2,30 +2,34 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://peremartra.github.io/optipfair/</loc>
-         <lastmod>2025-04-13</lastmod>
+         <lastmod>2025-04-20</lastmod>
     </url>
     <url>
          <loc>https://peremartra.github.io/optipfair/api/</loc>
-         <lastmod>2025-04-13</lastmod>
+         <lastmod>2025-04-20</lastmod>
     </url>
     <url>
          <loc>https://peremartra.github.io/optipfair/contributing/</loc>
-         <lastmod>2025-04-13</lastmod>
+         <lastmod>2025-04-20</lastmod>
     </url>
     <url>
          <loc>https://peremartra.github.io/optipfair/examples/</loc>
-         <lastmod>2025-04-13</lastmod>
+         <lastmod>2025-04-20</lastmod>
     </url>
     <url>
          <loc>https://peremartra.github.io/optipfair/installation/</loc>
-         <lastmod>2025-04-13</lastmod>
+         <lastmod>2025-04-20</lastmod>
     </url>
     <url>
          <loc>https://peremartra.github.io/optipfair/roadmap/</loc>
-         <lastmod>2025-04-13</lastmod>
+         <lastmod>2025-04-20</lastmod>
     </url>
     <url>
          <loc>https://peremartra.github.io/optipfair/usage/</loc>
-         <lastmod>2025-04-13</lastmod>
+         <lastmod>2025-04-20</lastmod>
+    </url>
+    <url>
+         <loc>https://peremartra.github.io/optipfair/vias_visualization/</loc>
+         <lastmod>2025-04-20</lastmod>
     </url>
 </urlset>

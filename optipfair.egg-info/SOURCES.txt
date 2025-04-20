@@ -11,6 +11,7 @@ docs/index.md
 docs/installation.md
 docs/roadmap.md
 docs/usage.md
+docs/vias_visualization.md
 optipfair/__init__.py
 optipfair.egg-info/PKG-INFO
 optipfair.egg-info/SOURCES.txt
@@ -18,6 +19,13 @@ optipfair.egg-info/dependency_links.txt
 optipfair.egg-info/entry_points.txt
 optipfair.egg-info/requires.txt
 optipfair.egg-info/top_level.txt
+optipfair/bias/__init__.py
+optipfair/bias/activations.py
+optipfair/bias/bias_visualization_example.py
+optipfair/bias/defaults.py
+optipfair/bias/metrics.py
+optipfair/bias/utils.py
+optipfair/bias/visualization.py
 optipfair/cli/__init__.py
 optipfair/cli/commands.py
 optipfair/evaluation/__init__.py

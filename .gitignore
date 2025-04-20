@@ -58,3 +58,6 @@ site/
 
 # Local files
 howto.txt
+
+# Visualization test output
+visualization_test_output/
