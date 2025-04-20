@@ -4,16 +4,24 @@ This document outlines the planned features and improvements for OptiPFair.
 
 ## Mid-term Goals (0-6 months)
 
+### Version 0.1.3 (Released)
+- **Bias Visualization**: Implemented tools for visualizing bias in transformer models ✓
+  - Mean activation differences across layers
+  - Heatmap visualizations for detailed pattern analysis
+  - PCA analysis for dimensional reduction
+  - Quantitative bias metrics
+
 ### Version 0.2.0
 - **Attention Mechanism Pruning**: Implement pruning techniques for attention layers
-- **Transformer Block Pruning**: Implement pruning techniques for entire transformer blocks
-- **Bias Visualization**: Implement visualizations for Bias in pair of prompts
+- **Transformer Block Pruning**: Implement pruning techniques for entire transformer 
 
 
 ### Version 0.3.0
 - **Comprehensive Benchmarks**: Add integration with common LLM benchmarks
 - **NO GLU Models**: Implement pruning techniques for older models (no GLU)
 - **Improved Documentation**: Add more examples and tutorials
+
+## Long-term Goals (6+ months)
 
 ### Version 0.4.0
 
@@ -22,8 +30,6 @@ This document outlines the planned features and improvements for OptiPFair.
 
 ### Version 0.5.0
 - **Fairness prunning**: consider bias in pruning. 
-
-## Long-term Goals (6+ months)
 
 ### Version 1.0.0
 - **Distributed Pruning**: Support for pruning very large models across multiple GPUs

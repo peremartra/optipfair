@@ -28,6 +28,12 @@ By participating in this project, you agree to maintain a respectful and inclusi
 3. Install development dependencies:
    ```bash
    pip install -e ".[dev]"
+   
+   # For working on bias visualization
+   pip install -e ".[viz]"
+   
+   # For working on evaluation tools
+   pip install -e ".[eval]"
    ```
 4. Create a new branch for your feature or bugfix:
    ```bash
@@ -98,6 +104,8 @@ For new features:
 - Add unit tests for each function or method
 - Add integration tests for interactions between components
 - Ensure tests cover both normal behavior and error cases
+- For bias visualization features, test both the numerical computations and visualization generation
+- Mock transformer models for unit tests to avoid requiring large model downloads
 
 ## Documentation
 
@@ -114,15 +122,18 @@ Documentation is a crucial part of the project. Please follow these guidelines:
 
 3. **README**: Update the README.md if your changes affect the installation, basic usage, or other key aspects.
 
+4. **Visualization Examples**: When adding new visualization features, include visual examples in the documentation.
+
 ## Future Roadmap
 
 OptiPFair is an evolving project with plans for several future enhancements. If you're interested in contributing to these areas, please join the discussion in the related issues:
 
 1. **Attention Layer Pruning**: Implementation of structured pruning for attention mechanisms.
-2. **Bias visualisations**: Implement visualizations of bias in pair prompts. 
+2. **Bias-aware Pruning**: Techniques that optimize for both efficiency and fairness.
 3. **Block Pruning**: Methods for pruning entire transformer blocks.
 4. **Evaluation Framework**: Comprehensive evaluation suite for pruned models.
 5. **Fine-tuning Integration**: Tools for fine-tuning after pruning.
+6. **Extended Bias Analysis**: Support for intersectional and multi-attribute bias analysis.
 
 ## Questions?
 
