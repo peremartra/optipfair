@@ -5,13 +5,13 @@ README.md
 pyproject.toml
 setup.py
 docs/api.md
+docs/bias_visualization.md
 docs/contributing.md
 docs/examples.md
 docs/index.md
 docs/installation.md
 docs/roadmap.md
 docs/usage.md
-docs/vias_visualization.md
 optipfair/__init__.py
 optipfair.egg-info/PKG-INFO
 optipfair.egg-info/SOURCES.txt
