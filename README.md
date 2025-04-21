@@ -97,6 +97,10 @@ _, metrics = visualize_bias(
 overall = metrics["pair_1"]["metrics"]["overall_metrics"]
 print(f"Mean activation difference: {overall['mean_difference']:.6f}")
 ```
+**Visualizations obtained with optiPfair analyzing the LLaMA 2.3-1B model for race bias.**
+| ![Mean Image Differences](/images/mean_image_differences.png) | ![activation_differences_layer.png](/images/activation_differences_layer.png) | ![pca_analysis.png](/images/pca_analysis.png)
+| ---| --- | --- |
+
 
 ### Command-Line Interface
 
