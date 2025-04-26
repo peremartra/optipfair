@@ -1,5 +1,7 @@
 # OptiPFair: Library Implementation Guide
 
+Designed to be used with you favourite LLM (ChatGPT / Claude / Gemini / Cursor / Windsurf). Just drop this file into your prompt or LLM Project and start building Optimized LLMs
+
 ## Overview
 
 OptiPFair is a Python library for structured pruning of large language models, with a primary focus on GLU architectures. It also provides built-in functionality for bias visualization and analysis. This guide provides comprehensive information on using all of OptiPFair's features.
