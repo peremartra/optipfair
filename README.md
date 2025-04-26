@@ -10,7 +10,6 @@
 
 A Python library for structured pruning, and Bias visualization,  of large language models, with a focus on GLU architectures and fairness analysis.
 
-
 ## Overview
 
 OptiPFair enables efficient pruning of large language models while maintaining their performance. It implements various structured pruning methods, starting with MLP pruning for GLU architectures (as used in models like LLaMA, Mistral, etc.).
@@ -23,7 +22,12 @@ Key features:
 - Simple Python API and CLI interface
 - Progress tracking and detailed statistics
 - **NEW**: Bias visualization tools to analyze and understand fairness issues
+- **NEW**: LLM Reference manual for pair programming
 
+
+## LLM Reference Manual for Pair Programming
+
+The file `optipfair_llm_reference_manual.md` is included in this repository to serve as a comprehensive reference for OptiPFair when working with large language models (LLMs). You can add this file to your prompt or project to provide LLMs with detailed context about OptiPFair’s API, features, and usage patterns. This is especially useful for facilitating effective pair programming with LLMs and OptiPFair, enabling more accurate code generation, troubleshooting, and integration.
 
 ## Installation
 
