@@ -29,6 +29,8 @@ Key features:
 
 The file `optipfair_llm_reference_manual.md` is included in this repository to serve as a comprehensive reference for OptiPFair when working with large language models (LLMs). You can add this file to your prompt or project to provide LLMs with detailed context about OptiPFair’s API, features, and usage patterns. This is especially useful for facilitating effective pair programming with LLMs and OptiPFair, enabling more accurate code generation, troubleshooting, and integration.
 
+![AI Pair Programing LLMs](/images/optipFair_llmflow.gif)
+
 ## Installation
 
 ```bash
