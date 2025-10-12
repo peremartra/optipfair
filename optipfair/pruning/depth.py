@@ -469,16 +469,18 @@ def _aggregate_importance_scores(layer_scores):
     
     return final_scores
 
-def _setup_layer_hooks(model, layers_path):
+def _setup_layer_hooks(model, layers_path, layer_importance_scores, batch_idx_ref):
     """
-    Register hooks to capture input/output of each transformer layer.
+    Register hooks to capture input/output of each transformer layer and calculate importance.
     
     Args:
         model: Pre-trained transformer model
         layers_path: Path to transformer layers (e.g., 'model.layers', 'transformer.h')
+        layer_importance_scores: Dict to store importance scores for each layer
+        batch_idx_ref: List containing current batch index (for debugging output)
         
     Returns:
-        tuple: (hooks, layer_inputs, layer_outputs, num_layers)
+        tuple: (hooks, layer_inputs, num_layers)
     """
     # Get the layers container using the path
     layers_container = model
@@ -487,7 +489,6 @@ def _setup_layer_hooks(model, layers_path):
     
     num_layers = len(layers_container)
     layer_inputs = {}
-    layer_outputs = {}
     hooks = []
 
     def create_input_hook(layer_idx):
@@ -498,10 +499,26 @@ def _setup_layer_hooks(model, layers_path):
 
     def create_output_hook(layer_idx):
         def hook(module, input, output):
+            # Extract output tensor
             if isinstance(output, tuple) and len(output) > 0:
-                layer_outputs[layer_idx] = output[0].detach()
+                output_tensor = output[0].detach()
             else:
-                layer_outputs[layer_idx] = output.detach()
+                output_tensor = output.detach()
+            
+            # Calculate importance immediately if we have the input
+            if layer_idx in layer_inputs:
+                input_tensor = layer_inputs[layer_idx]
+                importance = _calculate_cosine_importance(
+                    input_tensor, output_tensor, layer_idx,
+                    is_first_batch=(batch_idx_ref[0] == 0)
+                )
+                layer_importance_scores[layer_idx].append(importance)
+                
+                # Clear input tensor immediately to free memory
+                del layer_inputs[layer_idx]
+            else:
+                # No input tensor available, append 0.0
+                layer_importance_scores[layer_idx].append(0.0)
         return hook
 
     # Register hooks for each layer
@@ -509,7 +526,7 @@ def _setup_layer_hooks(model, layers_path):
         hooks.append(layer.register_forward_pre_hook(create_input_hook(i)))
         hooks.append(layer.register_forward_hook(create_output_hook(i)))
 
-    return hooks, layer_inputs, layer_outputs, num_layers
+    return hooks, layer_inputs, num_layers
 
 def analyze_layer_importance(model, dataloader, layers_path=None, show_progress=True):
     """
@@ -545,9 +562,16 @@ def analyze_layer_importance(model, dataloader, layers_path=None, show_progress=
                 "Please specify layers_path manually (e.g., 'model.layers', 'transformer.h')"
             )
     
-    # Step 2: Setup hooks and storage
-    hooks, layer_inputs, layer_outputs, num_layers = _setup_layer_hooks(model, layers_path)
+    # Step 2: Get number of layers first
+    layers_container = model
+    for part in layers_path.split('.'):
+        layers_container = getattr(layers_container, part)
+    num_layers = len(layers_container)
+    
+    # Setup hooks and storage
     layer_importance_scores = {i: [] for i in range(num_layers)}
+    batch_idx_ref = [0]  # Use list to allow mutation in hook closures
+    hooks, layer_inputs, num_layers = _setup_layer_hooks(model, layers_path, layer_importance_scores, batch_idx_ref)
     
     try:
         # Step 3: Process all batches with progress tracking
@@ -555,31 +579,17 @@ def analyze_layer_importance(model, dataloader, layers_path=None, show_progress=
         
         with torch.no_grad():
             for batch_idx, batch in enumerate(iterator):
+                # Update batch index for debug output
+                batch_idx_ref[0] = batch_idx
+                
                 # Move batch to model device
                 inputs = {k: v.to(device) for k, v in batch.items()}
                 
-                # Forward pass to trigger hooks
+                # Forward pass to trigger hooks (importance calculated in hooks)
                 model(**inputs)
                 
-                # Calculate importance for each layer
-                for layer_idx in range(num_layers):
-                    if layer_idx not in layer_inputs or layer_idx not in layer_outputs:
-                        layer_importance_scores[layer_idx].append(0.0)
-                        continue
-                    
-                    input_tensor = layer_inputs[layer_idx]
-                    output_tensor = layer_outputs[layer_idx]
-                    
-                    importance = _calculate_cosine_importance(
-                        input_tensor, output_tensor, layer_idx,
-                        is_first_batch=(batch_idx == 0)
-                    )
-                    
-                    layer_importance_scores[layer_idx].append(importance)
-                
-                # Clear storage for next batch
+                # Clear any remaining inputs (should already be cleared by output hooks)
                 layer_inputs.clear()
-                layer_outputs.clear()
     
     finally:
         # Step 4: Cleanup hooks (always executed, even if there's an error)
