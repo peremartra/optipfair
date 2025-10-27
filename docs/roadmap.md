@@ -14,10 +14,14 @@ This document outlines the planned features and improvements for OptiPFair.
 ## Version 0.1.4 (Released)
 - Depth pruning (Remove entire layer blocks) implementation. 
 
-### Version 0.2.0
-- **Attention Mechanism Pruning**: Implement pruning techniques for attention layers
+### Version 0.2.0 (Released - October 2025) ✅
+- **Data-Driven Width Pruning**: Hybrid importance calculation using activation statistics
+- **CFSP Integration**: Implementation based on research paper methodology
+- **Extended API**: Optional dataloader parameter for calibration
+- **Comprehensive Documentation**: Full guides and examples for data-driven pruning
 
 ### Version 0.3.0
+- **Attention Mechanism Pruning**: Implement pruning techniques for attention layers
 - **Comprehensive Benchmarks**: Add integration with common LLM benchmarks
 - **NO GLU Models**: Implement pruning techniques for older models (no GLU)
 - **Improved Documentation**: Add more examples and tutorials

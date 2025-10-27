@@ -14,8 +14,182 @@ from tqdm import tqdm
 from transformers import PreTrainedModel
 
 from .utils import validate_model_for_glu_pruning, get_model_layers
+import gc
 
 logger = logging.getLogger(__name__)
+
+# ==============================================================================
+# DATA-DRIVEN PRUNING: Activation Capture via Hooks
+# ==============================================================================
+
+# Global variable to accumulate activation norms during calibration
+_accumulated_act_norms = {}
+
+
+def setup_mlp_hooks_for_importance(model: PreTrainedModel, device: torch.device) -> List:
+    """
+    Register forward hooks on down_proj layers to capture input activations (X_d).
+    
+    Implements the activation capture mechanism from CFSP paper (Equation 8).
+    Computes L2 norm of each neuron's activations: ||X_d^i|| = sqrt(sum_{b,s} X_d[b,s,i]²)
+    
+    The hooks accumulate norms across multiple batches during calibration, storing
+    results on CPU to minimize VRAM usage.
+    
+    Args:
+        model: Pre-trained model with transformer layers
+        device: Device where the model is located
+        
+    Returns:
+        handles: List of hook handles (must be removed after calibration)
+        
+    Example:
+        >>> handles = setup_mlp_hooks_for_importance(model, device)
+        >>> # ... run forward passes ...
+        >>> for handle in handles:
+        >>>     handle.remove()
+    """
+    global _accumulated_act_norms
+    _accumulated_act_norms.clear()
+    
+    # Free memory before starting calibration
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    handles = []
+    
+    # Get model layers (supports LLaMA, Mistral, etc.)
+    layers = get_model_layers(model)
+    if not layers:
+        raise ValueError("Could not find transformer layers in model")
+    
+    # Initialize storage on CPU to save VRAM
+    for idx, layer in enumerate(layers):
+        intermediate_size = layer.mlp.down_proj.in_features
+        _accumulated_act_norms[idx] = torch.zeros(
+            intermediate_size,
+            dtype=torch.float32,
+            device='cpu'
+        )
+    
+    def make_hook(layer_idx: int):
+        """Factory function to create hook with layer index in closure"""
+        def hook(module, input, output):
+            """
+            Hook function to capture X_d (input to down_proj) and compute L2 norm.
+            
+            X_d shape: [batch_size, seq_len, intermediate_size]
+            Output: [intermediate_size] with ||X_d^i|| for each neuron i
+            """
+            X_d = input[0].detach()  # [B, S, I]
+            
+            # Compute L2 norm (CFSP Equation 8):
+            # torch.norm with p=2 and dim=(0,1) computes:
+            # ||X_d^i|| = sqrt(sum_{b,s} X_d[b,s,i]²)
+            act_norms_L2 = torch.norm(
+                X_d.to(torch.float32),  # Ensure precision
+                p=2,
+                dim=(0, 1)  # Sum over batch and sequence dimensions
+            )  # Result: [intermediate_size]
+            
+            # Accumulate on CPU to save VRAM
+            _accumulated_act_norms[layer_idx] += act_norms_L2.cpu()
+        
+        return hook
+    
+    # Register hooks on all down_proj layers
+    for idx, layer in enumerate(layers):
+        handle = layer.mlp.down_proj.register_forward_hook(make_hook(idx))
+        handles.append(handle)
+    
+    logger.info(f"Registered {len(handles)} hooks on down_proj layers for activation capture")
+    
+    return handles
+
+
+def get_activation_norms() -> Dict[int, torch.Tensor]:
+    """
+    Retrieve accumulated L2 norms from calibration.
+    
+    Returns a dictionary mapping layer indices to their accumulated activation norms.
+    The returned tensors are clones to prevent accidental modifications.
+    
+    Returns:
+        Dict mapping layer_idx -> activation_norms tensor [intermediate_size]
+        
+    Example:
+        >>> activation_norms = get_activation_norms()
+        >>> print(activation_norms[0].shape)  # torch.Size([8192]) for standard LLaMA
+    """
+    return {
+        layer_idx: norms.clone()  # Clone to prevent external modifications
+        for layer_idx, norms in _accumulated_act_norms.items()
+    }
+
+
+def run_calibration_forward_passes(
+    model: PreTrainedModel,
+    dataloader: Any,
+    device: torch.device,
+    show_progress: bool = True
+) -> None:
+    """
+    Run forward passes over dataloader to collect activation statistics.
+    
+    This function puts the model in eval mode and runs inference on the provided
+    dataloader while hooks capture activations. Memory is periodically cleared
+    to prevent OOM errors.
+    
+    Args:
+        model: Model with registered hooks
+        dataloader: DataLoader providing calibration data
+        device: Device where model is located
+        show_progress: Whether to show progress bar
+        
+    Note:
+        Hooks must be registered before calling this function using
+        setup_mlp_hooks_for_importance()
+    """
+    model.eval()
+    
+    iterator = tqdm(dataloader, desc="Calibration") if show_progress else dataloader
+    
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(iterator):
+            # Handle different dataloader formats
+            if isinstance(batch, dict):
+                inputs = {
+                    'input_ids': batch['input_ids'].to(device),
+                    'attention_mask': batch.get('attention_mask', None)
+                }
+                if inputs['attention_mask'] is not None:
+                    inputs['attention_mask'] = inputs['attention_mask'].to(device)
+            elif isinstance(batch, (list, tuple)):
+                # Assume (input_ids, attention_mask) format
+                inputs = {
+                    'input_ids': batch[0].to(device),
+                    'attention_mask': batch[1].to(device) if len(batch) > 1 else None
+                }
+            else:
+                raise ValueError(
+                    f"Unsupported batch format: {type(batch)}. "
+                    f"Expected dict or tuple of tensors."
+                )
+            
+            # Forward pass (hooks are triggered automatically)
+            _ = model(**inputs)
+            
+            # Periodic memory cleanup to avoid OOM
+            if (batch_idx + 1) % 10 == 0:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+    
+    logger.info(f"Completed calibration over {len(dataloader)} batches")
+
+# ==============================================================================
+# CLASSIC STATIC PRUNING. Neuron Pair Importance Computation
+# ==============================================================================
 
 def compute_neuron_pair_importance_maw(gate_weight: torch.Tensor, up_weight: torch.Tensor) -> torch.Tensor:
     """
@@ -65,6 +239,93 @@ def compute_neuron_pair_importance_pon(gate_weight: torch.Tensor, up_weight: tor
     importance_scores = gate_norms * up_norms
     return importance_scores
 
+def compute_neuron_pair_importance_maw_hybrid(
+    gate_weight: torch.Tensor,
+    up_weight: torch.Tensor,
+    down_weight: torch.Tensor,
+    X_d_norm: torch.Tensor
+) -> torch.Tensor:
+    """
+    Compute neuron pair importance using hybrid data-driven method (MAW + Activations).
+    
+    Implements CFSP methodology (arXiv:2409.13199v2, Equation 8):
+    
+    F_i^l = Σ_j [ |W_d^ij · ||X_d^i|| / (||W_d^*j|| · ||X_d^*||) ] + 
+            Σ_j [ |W_u^ij| / ||W_u^i*|| ] + 
+            Σ_j [ |W_g^ij| / ||W_g^i*|| ]
+    
+    Where:
+    - Component 1 (down_proj): Weights weighted by activations (DATA-DRIVEN)
+    - Component 2 (up_proj): Static weight-based importance
+    - Component 3 (gate_proj): Static weight-based importance
+    
+    Args:
+        gate_weight: Weight matrix from gate_proj [intermediate_size, hidden_size]
+        up_weight: Weight matrix from up_proj [intermediate_size, hidden_size]
+        down_weight: Weight matrix from down_proj [hidden_size, intermediate_size]
+        X_d_norm: Accumulated L2 norms from calibration [intermediate_size]
+        
+    Returns:
+        importance_scores: Importance score per neuron pair [intermediate_size]
+    """
+    device = gate_weight.device
+    intermediate_size = gate_weight.size(0)
+    
+    # Move X_d_norm to device and ensure float32 for numerical stability
+    X_d_norm = X_d_norm.to(device).to(torch.float32)
+    
+    # Convert all weights to float32
+    gate_weight = gate_weight.float()
+    up_weight = up_weight.float()
+    down_weight = down_weight.float()
+    
+    # ==========================================================================
+    # COMPONENT 1: down_proj with activations (DATA-DRIVEN)
+    # Term: |W_d^ij · ||X_d^i|| / (||W_d^*j|| · ||X_d^*||)
+    # ==========================================================================
+    
+    # Transpose down_weight: [hidden_size, intermediate_size] -> [intermediate_size, hidden_size]
+    W_d_t = down_weight.t()  # [intermediate_size, hidden_size]
+    W_d_abs = torch.abs(W_d_t)
+    
+    # NUMERATOR: |W_d^ij| * ||X_d^i||
+    numerator = W_d_abs * X_d_norm.unsqueeze(1)  # [intermediate_size, hidden_size]
+    
+    # DENOMINATOR: (Σ_i |W_d^ij|) * (Σ_i ||X_d^i||)
+    W_d_column_sums = W_d_abs.sum(dim=0, keepdim=True)  # [1, hidden_size]
+    X_d_total_norm = X_d_norm.sum()  # Scalar
+    denominator = W_d_column_sums * X_d_total_norm  # [1, hidden_size]
+    
+    # Normalized term: sum over output dimension j
+    normalized_down = (numerator / (denominator + 1e-8)).sum(dim=1)  # [intermediate_size]
+    
+    # ==========================================================================
+    # COMPONENT 2: up_proj weights only (STATIC)
+    # Term: |W_u^ij| / ||W_u^i*||
+    # ==========================================================================
+    
+    up_abs = torch.abs(up_weight)  # [intermediate_size, hidden_size]
+    row_sums_up = up_abs.sum(dim=1, keepdim=True)  # [intermediate_size, 1]
+    normalized_up = (up_abs / (row_sums_up + 1e-8)).sum(dim=1)  # [intermediate_size]
+    
+    # ==========================================================================
+    # COMPONENT 3: gate_proj weights only (STATIC)
+    # Term: |W_g^ij| / ||W_g^i*||
+    # ==========================================================================
+    
+    gate_abs = torch.abs(gate_weight)  # [intermediate_size, hidden_size]
+    row_sums_gate = gate_abs.sum(dim=1, keepdim=True)  # [intermediate_size, 1]
+    normalized_gate = (gate_abs / (row_sums_gate + 1e-8)).sum(dim=1)  # [intermediate_size]
+    
+    # ==========================================================================
+    # FINAL IMPORTANCE SCORE (Equation 8)
+    # ==========================================================================
+    
+    importance_scores = normalized_down + normalized_up + normalized_gate
+    
+    return importance_scores
+
+
 # Dictionary mapping method names to their respective functions
 IMPORTANCE_FUNCTIONS = {
     "MAW": compute_neuron_pair_importance_maw,
@@ -75,15 +336,22 @@ IMPORTANCE_FUNCTIONS = {
 def prune_neuron_pairs(
     mlp: nn.Module,
     prune_percentage: float,
-    importance_fn: Callable = compute_neuron_pair_importance_maw
+    importance_fn: Callable = compute_neuron_pair_importance_maw,
+    activation_norms: Optional[torch.Tensor] = None,
+    layer_idx: Optional[int] = None
 ) -> Tuple[nn.Linear, nn.Linear, nn.Linear, int]:
     """
     Prune a specific percentage of neurons from the MLP layers (GLU architecture).
     
+    Supports both static (weight-only) and hybrid (weight + activation) pruning.
+    
     Args:
         mlp: MLP module containing gate_proj, up_proj, and down_proj layers
         prune_percentage: Percentage of neurons to prune (0-100)
-        importance_fn: Function to compute neuron pair importance
+        importance_fn: Function to compute neuron pair importance (static methods)
+        activation_norms: Optional activation norms from calibration [intermediate_size].
+            When provided, uses hybrid importance calculation.
+        layer_idx: Layer index (used for logging when activation_norms provided)
         
     Returns:
         new_gate_proj: Pruned gate_proj layer
@@ -97,9 +365,20 @@ def prune_neuron_pairs(
     # Extract the weights from the MLP layers and convert to float for calculations
     gate_weight = mlp.gate_proj.weight.data.float()
     up_weight = mlp.up_proj.weight.data.float()
+    down_weight = mlp.down_proj.weight.data.float()
     
-    # Compute importance scores for neuron pairs
-    importance_scores = importance_fn(gate_weight, up_weight)
+    # Compute importance scores (HYBRID or STATIC)
+    if activation_norms is not None:
+        # DATA-DRIVEN: Use hybrid importance calculation
+        importance_scores = compute_neuron_pair_importance_maw_hybrid(
+            gate_weight=gate_weight,
+            up_weight=up_weight,
+            down_weight=down_weight,
+            X_d_norm=activation_norms
+        )
+    else:
+        # STATIC: Use traditional weight-based importance
+        importance_scores = importance_fn(gate_weight, up_weight)
     
     # Determine the new intermediate size
     original_intermediate_size = gate_weight.size(0)
@@ -109,7 +388,6 @@ def prune_neuron_pairs(
     # Validate the new size
     if k <= 0:
         raise ValueError(f"Invalid number of neuron pairs to keep: {k}. Reduce pruning percentage.")
-    
     # Select the neurons to keep based on importance scores
     _, indices_to_keep = torch.topk(importance_scores, k, largest=True)
     indices_to_keep = indices_to_keep.sort().values
@@ -168,6 +446,7 @@ def prune_model_mlp_glu(
     neuron_selection_method: str = "MAW",
     pruning_percentage: Optional[float] = 10,
     expansion_rate: Optional[float] = None,
+    dataloader: Optional[Any] = None,
     show_progress: bool = True,
 ) -> PreTrainedModel:
     """
@@ -178,6 +457,9 @@ def prune_model_mlp_glu(
         neuron_selection_method: Method to use for calculating neuron importance ("MAW", "VOW", or "PON")
         pruning_percentage: Percentage of neurons to prune (0-100)
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage)
+        dataloader: Optional DataLoader for data-driven pruning. When provided with
+            neuron_selection_method='MAW', enables hybrid importance calculation using
+            both weight magnitudes and activation statistics. Only compatible with 'MAW'.
         show_progress: Whether to show progress during pruning
         
     Returns:
@@ -187,6 +469,14 @@ def prune_model_mlp_glu(
     if not validate_model_for_glu_pruning(model):
         raise ValueError("Model is not compatible with GLU pruning. It must have gate_proj, up_proj, and down_proj layers.")
     
+    # Validate dataloader compatibility 
+    if dataloader is not None and neuron_selection_method != "MAW":
+        raise ValueError(
+            f"Data-driven pruning with dataloader is only supported for 'MAW' method. "
+            f"Got neuron_selection_method='{neuron_selection_method}'. "
+            f"Please use neuron_selection_method='MAW' or remove the dataloader parameter."
+        )    
+
     # Select the appropriate importance function
     if neuron_selection_method not in IMPORTANCE_FUNCTIONS:
         raise ValueError(f"Invalid neuron selection method: {neuron_selection_method}. "
@@ -219,6 +509,46 @@ def prune_model_mlp_glu(
     if not 0 <= pruning_percentage <= 100:
         raise ValueError(f"pruning_percentage must be between 0 and 100, got {pruning_percentage}")
     
+    # =============================================================================
+    # DATA-DRIVEN CALIBRATION (if dataloader provided)
+    # ==============================================================================
+    activation_norms = None
+    
+    if dataloader is not None:
+        logger.info("Starting data-driven calibration with provided dataloader")
+        
+        device = next(model.parameters()).device
+        
+        # Step 1: Register hooks to capture activations
+        handles = setup_mlp_hooks_for_importance(model, device)
+        
+        try:
+            # Step 2: Run forward passes to collect statistics
+            run_calibration_forward_passes(model, dataloader, device, show_progress)
+            
+            # Step 3: Extract accumulated norms
+            activation_norms = get_activation_norms()
+            
+            # Verify we collected norms for all layers
+            num_layers = len(get_model_layers(model))
+            if len(activation_norms) != num_layers:
+                raise RuntimeError(
+                    f"Calibration failed: expected norms for {num_layers} layers, "
+                    f"got {len(activation_norms)}"
+                )
+            
+            logger.info(f"Calibration complete: collected activation norms for {num_layers} layers")
+            
+        finally:
+            # Step 4: Always clean up hooks (even if error occurs)
+            for handle in handles:
+                handle.remove()
+            logger.info("Removed activation capture hooks")
+    
+    # ==============================================================================
+    # PRUNING
+    # ==============================================================================
+
     # Get all layers to prune
     layers = get_model_layers(model)
     if not layers:
@@ -226,16 +556,32 @@ def prune_model_mlp_glu(
     
     new_intermediate_size = None
     
-    # Wrap with tqdm if show_progress is True
-    layer_iterator = tqdm(enumerate(layers), total=len(layers), desc="Pruning layers") if show_progress else enumerate(layers)
+    # Prune each layer
+    iterator = tqdm(layers, desc="Pruning layers") if show_progress else layers
     
-    # Iterate through layers and apply pruning
-    for idx, layer in layer_iterator:
+    for idx, layer in enumerate(iterator):
         mlp = layer.mlp
         
-        # Prune neuron pairs in the MLP layer
-        new_gate_proj, new_up_proj, new_down_proj, new_size = prune_neuron_pairs(
-            mlp, pruning_percentage, importance_fn
+        # Store original size
+        original_intermediate_size = mlp.gate_proj.out_features
+        
+        # Get activation norms for this layer (if available)
+        layer_activation_norms = None
+        if activation_norms is not None:
+            if idx not in activation_norms:
+                raise KeyError(
+                    f"No activation norms found for layer {idx}. "
+                    f"Available layers: {list(activation_norms.keys())}"
+                )
+            layer_activation_norms = activation_norms[idx]
+        
+        # Prune the neuron pairs (HYBRID if activation_norms provided, STATIC otherwise)
+        new_gate_proj, new_up_proj, new_down_proj, new_intermediate_size = prune_neuron_pairs(
+            mlp=mlp,
+            prune_percentage=pruning_percentage,
+            importance_fn=importance_fn,
+            activation_norms=layer_activation_norms,  # ← NUEVO
+            layer_idx=idx  # ← NUEVO
         )
         
         # Replace original layers with pruned layers

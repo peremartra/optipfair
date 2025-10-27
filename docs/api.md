@@ -11,6 +11,7 @@ def prune_model(
     neuron_selection_method: str = "MAW",
     pruning_percentage: Optional[float] = 10,
     expansion_rate: Optional[float] = None,
+    dataloader: Optional[Any] = None,
     show_progress: bool = True,
     return_stats: bool = False,
     # Depth pruning parameters
@@ -22,12 +23,33 @@ def prune_model(
     """
     Prune a pre-trained language model using the specified pruning method.
     
+    Supports both width pruning (neuron-level) and depth pruning (layer-level).
+    For width pruning with MAW method, can use static (weight-only) or hybrid
+    (weight + activation) importance calculation.
+    
     Args:
         model: Pre-trained model to prune
         pruning_type: Type of pruning to apply ("MLP_GLU" or "DEPTH")
         neuron_selection_method: Method to calculate neuron importance ("MAW", "VOW", or "PON") - for MLP_GLU only
         pruning_percentage: Percentage of neurons to prune (0-100) - for MLP_GLU only
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage) - for MLP_GLU only
+        dataloader: Optional PyTorch DataLoader for data-driven pruning (MLP_GLU with MAW only).
+            When provided, enables hybrid importance calculation that combines weight
+            magnitudes with activation statistics from calibration data. The dataloader
+            should provide batches in dict format with 'input_ids' and 'attention_mask',
+            or as tuples of (input_ids, attention_mask). Typically 100-1000 samples
+            from your target domain yield best results.
+            
+            **Compatibility:** Only works with neuron_selection_method='MAW'.
+            Will raise ValueError if used with 'VOW' or 'PON'.
+            
+            **Example:**
+                >>> from torch.utils.data import DataLoader, TensorDataset
+                >>> inputs = tokenizer(texts, return_tensors="pt", padding=True)
+                >>> dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
+                >>> dataloader = DataLoader(dataset, batch_size=8)
+                >>> pruned = prune_model(model, dataloader=dataloader)
+                
         show_progress: Whether to show progress during pruning
         return_stats: Whether to return pruning statistics along with the model
         num_layers_to_remove: Number of layers to remove - for DEPTH only
@@ -37,6 +59,20 @@ def prune_model(
         
     Returns:
         Pruned model or tuple of (pruned_model, statistics) if return_stats is True
+        
+    Raises:
+        ValueError: If parameters are invalid or incompatible
+        ValueError: If dataloader is provided with non-MAW method
+        
+    Examples:
+        >>> # Static width pruning (traditional)
+        >>> pruned = prune_model(model, pruning_percentage=20)
+        
+        >>> # Data-driven width pruning (NEW in v0.2.0)
+        >>> pruned = prune_model(model, pruning_percentage=20, dataloader=my_dataloader)
+        
+        >>> # Depth pruning
+        >>> pruned = prune_model(model, pruning_type="DEPTH", num_layers_to_remove=4)
     """
 ```
 

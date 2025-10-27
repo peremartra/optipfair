@@ -136,6 +136,53 @@ The pruning process yields tangible results in model size and performance. Here'
 
 *Results based on the [MAW pruning method](#neuron-selection-methods). Full benchmark results will be published shortly.*
 
+### Data-Driven Width Pruning (NEW in v0.2.0)
+
+Enhance pruning decisions with activation statistics from calibration data. This hybrid approach combines weight magnitudes with real data patterns for more intelligent neuron selection.
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from torch.utils.data import DataLoader, TensorDataset
+import torch
+from optipfair import prune_model
+
+# Load model and tokenizer
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+tokenizer.pad_token = tokenizer.eos_token
+
+# Prepare calibration data (use your domain-specific dataset)
+texts = [
+    "Your domain-specific text here...",
+    "More examples from your use case...",
+    # Add 100-1000 samples for best results
+]
+
+inputs = tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=512)
+dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
+dataloader = DataLoader(dataset, batch_size=8)
+
+# Prune with data-driven importance calculation
+pruned_model, stats = prune_model(
+    model=model,
+    neuron_selection_method="MAW",  # Only MAW supports data-driven pruning
+    pruning_percentage=20,
+    dataloader=dataloader,  # ← Enables hybrid pruning
+    show_progress=True,
+    return_stats=True
+)
+
+print(f"Reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)")
+pruned_model.save_pretrained("./pruned-datadriven-model")
+```
+
+**Key Benefits:**
+- 📊 **Better Preservation**: Keeps neurons important for your specific use case
+- 🎯 **Domain Adaptation**: Use calibration data from your target domain
+- 🔬 **Research-Backed**: Based on CFSP methodology (arXiv:2409.13199v2)
+- ⚡ **Easy Integration**: Just add a dataloader - no other changes needed
+
+**Note:** Data-driven pruning is currently only available with `neuron_selection_method="MAW"`. Using a dataloader with "VOW" or "PON" will raise a `ValueError`.
+
 ### Pruning Transformer Layers (Depth Pruning)
 
 Remove entire layers from a model for significant efficiency gains. Here, we remove the last 4 layers.

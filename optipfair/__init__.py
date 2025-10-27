@@ -14,7 +14,7 @@ from .pruning.depth import prune_model_depth, analyze_layer_importance
 
 from .pruning.utils import get_pruning_statistics
 
-__version__ = "0.1.5"
+__version__ = "0.2.0"
 
 # Configure logging
 logging.basicConfig(
@@ -29,6 +29,7 @@ def prune_model(
     neuron_selection_method: str = "MAW",
     pruning_percentage: Optional[float] = 10,
     expansion_rate: Optional[float] = None,
+    dataloader: Optional[Any] = None,
     show_progress: bool = True,
     return_stats: bool = False,
     # Depth pruning parameters
@@ -46,6 +47,10 @@ def prune_model(
         neuron_selection_method: Method to calculate neuron importance ("MAW", "VOW", or "PON") - for MLP_GLU only
         pruning_percentage: Percentage of neurons to prune (0-100) - for MLP_GLU only
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage) - for MLP_GLU only
+        dataloader: Optional PyTorch DataLoader for data-driven pruning (MLP_GLU only).
+            When provided with neuron_selection_method='MAW', enables hybrid pruning that
+            combines weight magnitudes with activation statistics from calibration data.
+            Only compatible with 'MAW' method. If None, traditional static pruning is used.
         show_progress: Whether to show progress during pruning
         return_stats: Whether to return pruning statistics along with the model
         num_layers_to_remove: Number of layers to remove - for DEPTH only
@@ -69,6 +74,7 @@ def prune_model(
             neuron_selection_method=neuron_selection_method,
             pruning_percentage=pruning_percentage,
             expansion_rate=expansion_rate,
+            dataloader=dataloader,
             show_progress=show_progress,
         )
     elif pruning_type == "DEPTH":

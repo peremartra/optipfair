@@ -55,6 +55,26 @@ pruned_model, stats = prune_model(
     return_stats=True                    # Return pruning statistics
 )
 
+# Data-driven MLP GLU pruning (NEW - with calibration data)
+from torch.utils.data import DataLoader, TensorDataset
+
+# Prepare calibration dataloader
+calibration_texts = load_calibration_data()  # Your function
+inputs = tokenizer(calibration_texts, return_tensors="pt", padding=True, 
+                  truncation=True, max_length=512)
+dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
+dataloader = DataLoader(dataset, batch_size=8)
+
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",        # Only MAW supports dataloader
+    pruning_percentage=20,
+    dataloader=dataloader,                # ← Enables hybrid calculation
+    show_progress=True,
+    return_stats=True
+)
+
 # Depth pruning examples
 pruned_model, stats = prune_model(
     model=model,
@@ -139,13 +159,53 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
 
 1. **MAW (Maximum Absolute Weight)** - Default method that identifies neurons based on the maximum absolute weight values in their connections. Most effective for GLU architectures.
 
-   ```python
+   **Static MAW (weight-only):**
+```python
    pruned_model = prune_model(
        model=model,
        neuron_selection_method="MAW",
        pruning_percentage=20
    )
-   ```
+```
+
+   **Data-Driven MAW (hybrid: weights + activations):**
+   
+   When you provide a dataloader, MAW switches to a hybrid importance calculation that combines:
+   - Static weight magnitudes from `gate_proj` and `up_proj` layers
+   - Dynamic activation statistics from `down_proj` captured during calibration
+   
+   This data-driven approach implements the CFSP methodology (arXiv:2409.13199v2) and typically produces better pruned models that retain more of the original model's capabilities.
+```python
+   from torch.utils.data import DataLoader, TensorDataset
+   
+   # Prepare calibration dataloader
+   texts = ["Sample text 1", "Sample text 2", ...]  # Your calibration data
+   inputs = tokenizer(
+       texts,
+       return_tensors="pt",
+       padding=True,
+       truncation=True,
+       max_length=512
+   )
+   dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
+   calibration_dataloader = DataLoader(dataset, batch_size=8)
+   
+   # Data-driven pruning with calibration
+   pruned_model = prune_model(
+       model=model,
+       neuron_selection_method="MAW",
+       pruning_percentage=20,
+       dataloader=calibration_dataloader,  # ← Enables hybrid calculation
+       show_progress=True
+   )
+```
+   
+   **Key considerations for data-driven pruning:**
+   - Use a representative calibration dataset (100-1000 samples recommended)
+   - Domain-specific data works best (e.g., medical texts for medical models)
+   - Generic datasets like WikiText work well for general-purpose models
+   - Larger batch sizes (8-16) provide more stable activation statistics
+   - Only compatible with `neuron_selection_method="MAW"`
 
 2. **VOW (Variance of Weights)** - Identifies neurons based on the variance of their weight values.
 
@@ -202,6 +262,164 @@ OptiPFair supports three methods for selecting which layers to remove during dep
        layer_indices=[2, 5, 8]  # Remove layers 2, 5, and 8
    )
    ```
+
+### Data-Driven Width Pruning: Deep Dive
+
+Data-driven pruning enhances the traditional weight-based pruning by incorporating activation statistics collected during a calibration phase. This hybrid approach provides more informed decisions about which neurons are truly important for your specific use case.
+
+#### How It Works
+
+The process consists of three phases:
+
+**Phase 1: Calibration (Activation Capture)**
+```python
+# During calibration, PyTorch hooks capture activations at down_proj inputs
+# Computes L2 norms: ||X_d^i|| = sqrt(sum_{batch,seq} X_d[batch,seq,i]²)
+# These norms are accumulated across all calibration batches
+```
+
+**Phase 2: Hybrid Importance Calculation**
+
+The importance score combines three components (CFSP Equation 8):
+- **Component 1 (down_proj)**: Weights × Activations (DATA-DRIVEN)
+- **Component 2 (up_proj)**: Weight magnitudes only (STATIC)
+- **Component 3 (gate_proj)**: Weight magnitudes only (STATIC)
+
+**Phase 3: Pruning**
+
+Neurons with lowest importance scores are removed, just like static pruning.
+
+#### Complete Example: Domain-Specific Model
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from datasets import load_dataset
+from torch.utils.data import DataLoader
+import torch
+
+# Load model
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-3.2-1B",
+    torch_dtype=torch.float16,
+    device_map="auto"
+)
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+tokenizer.pad_token = tokenizer.eos_token
+
+# Prepare domain-specific calibration data
+# Example: Medical domain
+calibration_texts = [
+    "The patient presented with acute myocardial infarction...",
+    "Differential diagnosis includes pneumonia and bronchitis...",
+    "Laboratory results showed elevated troponin levels...",
+    # ... add 100-1000 domain-specific samples
+]
+
+# Or use a public dataset
+dataset = load_dataset('wikitext', 'wikitext-2-raw-v1', split='train[:1000]')
+calibration_texts = [item['text'] for item in dataset if len(item['text']) > 50]
+
+# Tokenize
+inputs = tokenizer(
+    calibration_texts,
+    return_tensors="pt",
+    padding=True,
+    truncation=True,
+    max_length=512
+)
+
+# Create dataloader
+from torch.utils.data import TensorDataset
+dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
+calibration_loader = DataLoader(dataset, batch_size=8, shuffle=False)
+
+# Apply data-driven pruning
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",
+    pruning_percentage=20,
+    dataloader=calibration_loader,  # ← Triggers hybrid calculation
+    show_progress=True,
+    return_stats=True
+)
+
+print(f"Original parameters: {stats['original_parameters']:,}")
+print(f"Pruned parameters: {stats['pruned_parameters']:,}")
+print(f"Reduction: {stats['percentage_reduction']:.2f}%")
+
+# Save the pruned model
+pruned_model.save_pretrained("./medical-llama-pruned-20")
+tokenizer.save_pretrained("./medical-llama-pruned-20")
+```
+
+#### Comparing Static vs Data-Driven Pruning
+```python
+# Prune with static method (weights only)
+static_pruned = prune_model(
+    model=model,
+    neuron_selection_method="MAW",
+    pruning_percentage=20,
+    dataloader=None  # Static
+)
+
+# Prune with data-driven method (weights + activations)
+datadriven_pruned = prune_model(
+    model=model,
+    neuron_selection_method="MAW",
+    pruning_percentage=20,
+    dataloader=calibration_loader  # Data-driven
+)
+
+# Evaluate both (use your evaluation framework)
+# Typically data-driven pruning retains 2-5% more performance
+```
+
+#### Best Practices for Calibration Data
+
+1. **Dataset Size:**
+   - Minimum: 100 samples
+   - Recommended: 500-1000 samples
+   - More samples = more stable statistics
+
+2. **Data Quality:**
+   - Use data representative of your target use case
+   - Match the domain/style of expected inputs
+   - Include diverse examples covering key vocabulary
+
+3. **Data Sources:**
+   - **General purpose**: WikiText, C4, OpenWebText
+   - **Domain-specific**: Medical papers, legal documents, code repositories
+   - **Task-specific**: Your application's actual prompts/queries
+
+4. **Batch Size:**
+   - Recommended: 8-16 samples per batch
+   - Larger batches = smoother activation statistics
+   - Adjust based on GPU memory
+
+5. **Sequence Length:**
+   - Use realistic lengths for your use case
+   - Typical: 256-512 tokens
+   - Longer sequences capture more context
+
+#### Error Handling
+```python
+# Only MAW supports dataloader
+try:
+    pruned = prune_model(
+        model=model,
+        neuron_selection_method="VOW",  # Not supported
+        dataloader=calibration_loader
+    )
+except ValueError as e:
+    print(f"Error: {e}")
+    # Use MAW instead
+    pruned = prune_model(
+        model=model,
+        neuron_selection_method="MAW",
+        dataloader=calibration_loader
+    )
+```
+
 
 ### Model Analysis
 

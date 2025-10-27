@@ -88,6 +88,217 @@ pruned_model = prune_model(
     pruning_percentage=20
 )
 ```
+## Data-Driven Pruning (v0.2.0+)
+
+### Overview
+
+Data-driven pruning enhances neuron selection by incorporating activation statistics from real data. Instead of relying solely on weight magnitudes, this hybrid approach analyzes how neurons actually behave with your specific data distribution.
+
+### When to Use Data-Driven Pruning
+
+**Use data-driven pruning when:**
+- 🎯 You have domain-specific data (medical, legal, code, etc.)
+- 📊 You want to preserve task-specific capabilities
+- 🔬 You need more intelligent neuron selection
+- ⚡ You can afford a one-time calibration pass
+
+**Use static pruning when:**
+- ⚡ You need fastest possible pruning
+- 🌐 You're pruning for general-purpose use
+- 💾 You don't have representative calibration data
+
+### Basic Usage
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from torch.utils.data import DataLoader, TensorDataset
+from optipfair import prune_model
+
+# 1. Load model
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+tokenizer.pad_token = tokenizer.eos_token
+
+# 2. Prepare calibration data
+texts = ["Your domain-specific examples here..."] * 500
+inputs = tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=512)
+dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
+dataloader = DataLoader(dataset, batch_size=8)
+
+# 3. Prune with calibration
+pruned_model = prune_model(
+    model=model,
+    neuron_selection_method="MAW",
+    pruning_percentage=20,
+    dataloader=dataloader,  # ← Enables data-driven pruning
+    show_progress=True
+)
+```
+
+### Calibration Data Guidelines
+
+#### Dataset Size
+- **Minimum:** 50-100 samples
+- **Recommended:** 500-1000 samples
+- **Maximum:** 5000+ samples (diminishing returns)
+
+#### Data Quality
+✅ **Good calibration data:**
+- Representative of target use case
+- Diverse examples from domain
+- Natural distribution of inputs
+- Similar length to deployment data
+
+❌ **Poor calibration data:**
+- Generic/unrelated text
+- Single repeated example
+- Extreme outliers only
+- Wrong language/domain
+
+#### Example: Code Generation Model
+```python
+# Good: Domain-specific code samples
+code_samples = [
+    "def fibonacci(n): return n if n < 2 else fibonacci(n-1) + fibonacci(n-2)",
+    "class DataLoader: def __init__(self, data): self.data = data",
+    "import numpy as np\narray = np.zeros((10, 10))",
+    # ... 500 more diverse code examples
+]
+
+# Bad: Generic text
+bad_samples = [
+    "The quick brown fox jumps over the lazy dog",
+    "Hello world",
+    # ... unrelated to code
+]
+```
+
+### Batch Size Recommendations
+
+| Model Size | VRAM | Batch Size | Calibration Samples |
+|-----------|------|------------|-------------------|
+| < 1B params | 8GB | 16-32 | 500-1000 |
+| 1-3B params | 16GB | 8-16 | 500-1000 |
+| 3-7B params | 24GB | 4-8 | 300-500 |
+| 7-13B params | 40GB+ | 2-4 | 200-300 |
+
+### Understanding the Hybrid Method
+
+Data-driven pruning uses the CFSP (Coarse-to-Fine Structured Pruning) methodology:
+
+**Equation 8 from CFSP paper:**
+```
+Importance(neuron_i) = 
+    activation_component(neuron_i) +    # Data-driven (down_proj)
+    weight_component_up(neuron_i) +     # Static (up_proj)
+    weight_component_gate(neuron_i)     # Static (gate_proj)
+```
+
+**Components:**
+1. **Activation Component (down_proj):** Measures how much each neuron activates with real data
+2. **Weight Components (up_proj, gate_proj):** Traditional magnitude-based importance
+
+This combination ensures:
+- Neurons important for your data are preserved
+- Structural integrity is maintained
+- Pruning is stable and predictable
+
+### Advanced: Custom Dataloader
+```python
+from torch.utils.data import Dataset, DataLoader
+
+class CustomCalibrationDataset(Dataset):
+    def __init__(self, texts, tokenizer, max_length=512):
+        self.encodings = tokenizer(
+            texts,
+            truncation=True,
+            padding='max_length',
+            max_length=max_length,
+            return_tensors='pt'
+        )
+    
+    def __len__(self):
+        return len(self.encodings['input_ids'])
+    
+    def __getitem__(self, idx):
+        return {
+            'input_ids': self.encodings['input_ids'][idx],
+            'attention_mask': self.encodings['attention_mask'][idx]
+        }
+
+# Use custom dataset
+dataset = CustomCalibrationDataset(my_texts, tokenizer)
+dataloader = DataLoader(dataset, batch_size=8, shuffle=False)
+
+pruned_model = prune_model(model, dataloader=dataloader, pruning_percentage=20)
+```
+
+### Comparison: Static vs Data-Driven
+```python
+# Test both methods
+import copy
+
+# Static pruning
+model_static = copy.deepcopy(model)
+pruned_static = prune_model(
+    model_static,
+    pruning_percentage=20,
+    dataloader=None  # Static
+)
+
+# Data-driven pruning
+model_datadriven = copy.deepcopy(model)
+pruned_datadriven = prune_model(
+    model_datadriven,
+    pruning_percentage=20,
+    dataloader=calibration_dataloader  # Hybrid
+)
+
+# Evaluate on your benchmark
+# Typically data-driven shows 2-5% better performance retention
+```
+
+### Troubleshooting
+
+#### Error: "Data-driven pruning with dataloader is only supported for 'MAW' method"
+**Solution:** Change `neuron_selection_method` to `"MAW"`:
+```python
+pruned = prune_model(model, neuron_selection_method="MAW", dataloader=dl)
+```
+
+#### Out of Memory during calibration
+**Solutions:**
+1. Reduce batch size: `DataLoader(dataset, batch_size=2)`
+2. Reduce calibration samples: Use 100-200 samples instead of 1000
+3. Use smaller max_length: `tokenizer(..., max_length=256)`
+
+#### Calibration taking too long
+**Solutions:**
+1. Use fewer samples (100-300 is often sufficient)
+2. Increase batch size if VRAM allows
+3. Use shorter sequences
+
+### Performance Tips
+
+1. **Use FP16/BF16:** Load model with `torch_dtype=torch.float16` for faster calibration
+2. **Shuffle Data:** Shuffle calibration dataloader for better representation
+3. **Cache Dataset:** Pre-tokenize and cache your calibration dataset
+4. **Monitor VRAM:** Use `torch.cuda.empty_cache()` if needed
+```python
+# Optimized example
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-3.2-1B",
+    torch_dtype=torch.float16,  # Faster calibration
+    device_map="auto"
+)
+
+dataloader = DataLoader(
+    dataset,
+    batch_size=16,
+    shuffle=True,  # Better representation
+    num_workers=2  # Parallel data loading
+)
+```
+
 
 ### VOW (Variance of Weights)
 
