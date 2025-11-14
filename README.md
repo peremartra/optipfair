@@ -341,11 +341,13 @@ Contributions are welcome! Whether it's bug reports, feature requests, or code c
 If you use optipfair in your research or projects, please cite the library:
 
 ```bibtex
-@software{optipfair,
-  author = {Pere Martra},
-  title = {optipfair: A Library for Structured Pruning and Bias Visualization of Large Language Models},
+@misc{Martra2024optipfair,
+  author = {Martra, Pere},
+  title = {{optipfair: A Library for Structured Pruning and Bias Visualization of Large Language Models}},
   year = {2024},
-  url = {https://github.com/peremartra/optipfair}
+  howpublished = {GitHub Repository},
+  url = {https://github.com/peremartra/optipfair},
+  note = {Versión 0.2.0, accedido 14 Noviembre 2025}
 }
 ```
 ### License
