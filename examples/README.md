@@ -23,6 +23,9 @@
 - [**Width Pruning Tutorial**](basic_pruning_mlp.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/basic_pruning_mlp.ipynb)  
   Interactive width pruning for modern GLU architectures (LLaMA, Qwen, Gemma). See 15-30% size reduction by removing neurons from MLP layers.
 
+- [**Hardware-Optimized Pruning (expansion_divisor)**](expansion_divisor_example.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/expansion_divisor_example.ipynb)  
+  Learn how to use the `expansion_divisor` parameter to optimize pruned models for specific hardware. Rounds intermediate layer sizes to multiples of 32, 64, 128, or 256 for better GPU/TPU performance.
+
 - [**Depth Pruning Tutorial**](depth_pruning.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/depth_pruning.ipynb)  
   Learn how to remove entire transformer layers while maintaining model performance. Complementary to width pruning.
 

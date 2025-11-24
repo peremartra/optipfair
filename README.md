@@ -114,6 +114,7 @@ pruned_model, stats = prune_model(
     pruning_type="MLP_GLU",
     neuron_selection_method="MAW",
     pruning_percentage=20,
+    expansion_divisor=None,  # Optional: round to divisor (32, 64, 128, 256)
     show_progress=True,
     return_stats=True
 )
@@ -182,6 +183,41 @@ pruned_model.save_pretrained("./pruned-datadriven-model")
 - ⚡ **Easy Integration**: Just add a dataloader - no other changes needed
 
 **Note:** Data-driven pruning is currently only available with `neuron_selection_method="MAW"`. Using a dataloader with "VOW" or "PON" will raise a `ValueError`.
+
+### Hardware-Optimized Pruning with expansion_divisor (NEW in v0.2.0)
+
+The `expansion_divisor` parameter ensures that intermediate layer sizes are divisible by specific values (32, 64, 128, or 256), optimizing performance on modern GPUs and TPUs.
+
+```python
+from transformers import AutoModelForCausalLM
+from optipfair import prune_model
+
+# Load model
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+
+# Prune with hardware optimization
+pruned_model, stats = prune_model(
+    model=model,
+    neuron_selection_method="MAW",
+    pruning_percentage=20,
+    expansion_divisor=128,  # Round intermediate size to multiple of 128
+    show_progress=True,
+    return_stats=True
+)
+
+print(f"Intermediate size is divisible by 128: {stats['expansion_rate']}")
+pruned_model.save_pretrained("./pruned-optimized-model")
+```
+
+**Key Benefits:**
+- 🚀 **Better GPU Performance**: Optimized memory access patterns
+- ⚡ **Tensor Core Efficiency**: Multiples of 128/256 leverage modern GPU architectures
+- 🎯 **Flexible**: Works with both `pruning_percentage` and `expansion_rate`
+- 🔧 **Easy to Use**: Just add one parameter to existing code
+
+**Valid Values:** `None` (default, no rounding), `32`, `64`, `128`, `256`
+
+**Note:** Cannot be used alone—requires either `pruning_percentage` or `expansion_rate`.
 
 ### Pruning Transformer Layers (Depth Pruning)
 

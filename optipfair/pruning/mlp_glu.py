@@ -333,12 +333,32 @@ IMPORTANCE_FUNCTIONS = {
     "PON": compute_neuron_pair_importance_pon,
 }
 
+def round_to_divisor(value: int, divisor: int) -> int:
+    """
+    Round value to the nearest multiple of divisor.
+    
+    Args:
+        value: Value to round
+        divisor: Divisor to round to
+        
+    Returns:
+        Rounded value (nearest multiple of divisor)
+        
+    Example:
+        >>> round_to_divisor(8100, 128)
+        8064
+        >>> round_to_divisor(8200, 128)
+        8192
+    """
+    return round(value / divisor) * divisor
+
 def prune_neuron_pairs(
     mlp: nn.Module,
     prune_percentage: float,
     importance_fn: Callable = compute_neuron_pair_importance_maw,
     activation_norms: Optional[torch.Tensor] = None,
-    layer_idx: Optional[int] = None
+    layer_idx: Optional[int] = None,
+    expansion_divisor: Optional[int] = None,
 ) -> Tuple[nn.Linear, nn.Linear, nn.Linear, int]:
     """
     Prune a specific percentage of neurons from the MLP layers (GLU architecture).
@@ -352,6 +372,7 @@ def prune_neuron_pairs(
         activation_norms: Optional activation norms from calibration [intermediate_size].
             When provided, uses hybrid importance calculation.
         layer_idx: Layer index (used for logging when activation_norms provided)
+        expansion_divisor: Optional divisor to round the intermediate size to nearest multiple
         
     Returns:
         new_gate_proj: Pruned gate_proj layer
@@ -384,6 +405,20 @@ def prune_neuron_pairs(
     original_intermediate_size = gate_weight.size(0)
     num_neuron_pairs_to_prune = min(int(prune_percentage / 100 * original_intermediate_size), original_intermediate_size - 1)
     k = original_intermediate_size - num_neuron_pairs_to_prune
+    
+    # Apply expansion_divisor rounding if specified
+    if expansion_divisor is not None:
+        k_rounded = round_to_divisor(k, expansion_divisor)
+        # Ensure we don't exceed original size or go below 1
+        k_rounded = min(k_rounded, original_intermediate_size)
+        k_rounded = max(k_rounded, 1)
+        
+        if k_rounded != k:
+            logger.debug(
+                f"Layer {layer_idx}: Adjusted intermediate size from {k} to {k_rounded} "
+                f"(divisible by {expansion_divisor})"
+            )
+        k = k_rounded
     
     # Validate the new size
     if k <= 0:
@@ -446,6 +481,7 @@ def prune_model_mlp_glu(
     neuron_selection_method: str = "MAW",
     pruning_percentage: Optional[float] = 10,
     expansion_rate: Optional[float] = None,
+    expansion_divisor: Optional[int] = None,
     dataloader: Optional[Any] = None,
     show_progress: bool = True,
 ) -> PreTrainedModel:
@@ -457,6 +493,9 @@ def prune_model_mlp_glu(
         neuron_selection_method: Method to use for calculating neuron importance ("MAW", "VOW", or "PON")
         pruning_percentage: Percentage of neurons to prune (0-100)
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage)
+        expansion_divisor: Optional divisor (32, 64, 128, 256, or None) to round intermediate layer size.
+            When specified, the intermediate size will be rounded to the nearest multiple after applying
+            pruning. Cannot be used alone - requires either pruning_percentage or expansion_rate.
         dataloader: Optional DataLoader for data-driven pruning. When provided with
             neuron_selection_method='MAW', enables hybrid importance calculation using
             both weight magnitudes and activation statistics. Only compatible with 'MAW'.
@@ -468,6 +507,22 @@ def prune_model_mlp_glu(
     # Validate the model for GLU pruning
     if not validate_model_for_glu_pruning(model):
         raise ValueError("Model is not compatible with GLU pruning. It must have gate_proj, up_proj, and down_proj layers.")
+    
+    # Validate expansion_divisor
+    if expansion_divisor is not None:
+        valid_divisors = [32, 64, 128, 256]
+        if expansion_divisor not in valid_divisors:
+            raise ValueError(
+                f"expansion_divisor must be one of {valid_divisors} or None. "
+                f"Got: {expansion_divisor}"
+            )
+        
+        # expansion_divisor requires pruning_percentage or expansion_rate
+        if pruning_percentage is None and expansion_rate is None:
+            raise ValueError(
+                "expansion_divisor cannot be used alone. "
+                "Please provide either pruning_percentage or expansion_rate."
+            )
     
     # Validate dataloader compatibility 
     if dataloader is not None and neuron_selection_method != "MAW":
@@ -580,18 +635,15 @@ def prune_model_mlp_glu(
             mlp=mlp,
             prune_percentage=pruning_percentage,
             importance_fn=importance_fn,
-            activation_norms=layer_activation_norms,  # ← NUEVO
-            layer_idx=idx  # ← NUEVO
+            activation_norms=layer_activation_norms,
+            layer_idx=idx,
+            expansion_divisor=expansion_divisor,
         )
         
         # Replace original layers with pruned layers
         mlp.gate_proj = new_gate_proj
         mlp.up_proj = new_up_proj
         mlp.down_proj = new_down_proj
-        
-        # Store the new intermediate size (should be the same for all layers)
-        if new_intermediate_size is None:
-            new_intermediate_size = new_size
     
     # Update model configuration
     if hasattr(model, "config") and hasattr(model.config, "intermediate_size"):

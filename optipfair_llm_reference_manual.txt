@@ -51,6 +51,7 @@ pruned_model, stats = prune_model(
     neuron_selection_method="MAW",       # Method to calculate neuron importance
     pruning_percentage=20,               # Percentage of neurons to prune
     # expansion_rate=140,                # Alternatively, specify target expansion rate
+    # expansion_divisor=128,             # Optional: round intermediate size to divisor (32, 64, 128, 256)
     show_progress=True,                  # Show progress during pruning
     return_stats=True                    # Return pruning statistics
 )
@@ -167,6 +168,36 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
        pruning_percentage=20
    )
 ```
+
+   **With expansion_divisor:**
+   
+   The `expansion_divisor` parameter ensures that the intermediate layer size is divisible by a specific value (32, 64, 128, or 256). This is useful for hardware optimization, as many accelerators perform better with tensor dimensions that are multiples of certain values.
+   
+   ```python
+   # Round intermediate size to nearest multiple of 128
+   pruned_model = prune_model(
+       model=model,
+       neuron_selection_method="MAW",
+       pruning_percentage=20,
+       expansion_divisor=128  # Intermediate size will be divisible by 128
+   )
+   
+   # Can also be used with expansion_rate
+   pruned_model = prune_model(
+       model=model,
+       neuron_selection_method="MAW",
+       expansion_rate=200,
+       expansion_divisor=64  # Intermediate size will be divisible by 64
+   )
+   ```
+   
+   **Key considerations for expansion_divisor:**
+   - Valid values: `None` (default), `32`, `64`, `128`, `256`
+   - Cannot be used alone - requires either `pruning_percentage` or `expansion_rate`
+   - Rounding occurs after calculating the target size from pruning/expansion parameters
+   - Rounds to the nearest multiple (up or down)
+   - Useful for optimizing performance on specific hardware (GPUs, TPUs)
+   - Common practice: use 128 or 256 for modern GPUs
 
    **Data-Driven MAW (hybrid: weights + activations):**
    
