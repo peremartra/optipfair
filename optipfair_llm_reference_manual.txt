@@ -55,6 +55,7 @@ pruned_model, stats = prune_model(
     show_progress=True,                  # Show progress during pruning
     return_stats=True                    # Return pruning statistics
 )
+#If expansion_rate is specified pruning_percentatge must be set to None 
 
 # Data-driven MLP GLU pruning (NEW - with calibration data)
 from torch.utils.data import DataLoader, TensorDataset
