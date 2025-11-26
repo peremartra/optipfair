@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: optipfair
-Version: 0.2.1
+Version: 0.2.2
 Summary: A library for structured pruning & Bias visualization of large language models
 Home-page: https://github.com/peremartra/optipfair
 Author: Pere Martra
@@ -234,6 +234,48 @@ pruned_model.save_pretrained("./pruned-datadriven-model")
 
 **Note:** Data-driven pruning is currently only available with `neuron_selection_method="MAW"`. Using a dataloader with "VOW" or "PON" will raise a `ValueError`.
 
+### Selective Layer Width Pruning (NEW in v0.2.0)
+
+Prune neurons only in specific layers while leaving others unchanged. Perfect for preserving critical layers or implementing layer-specific optimization strategies.
+
+```python
+from transformers import AutoModelForCausalLM
+from optipfair import prune_model
+
+# Load a pre-trained model
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+
+# Prune neurons only in specific layers (e.g., middle layers)
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",
+    pruning_percentage=30,
+    layer_indices=[5, 10, 15, 20, 25],  # Only prune these layers
+    show_progress=True,
+    return_stats=True
+)
+
+# Print pruning statistics
+print(f"Pruned {stats['pruned_layers']} of {stats['total_layers']} layers")
+print(f"Total reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)")
+
+# Save the pruned model
+pruned_model.save_pretrained("./selective-pruned-llama")
+```
+
+**Key Benefits:**
+- 🎯 **Precision Control**: Choose exactly which layers to optimize
+- 🛡️ **Preserve Critical Layers**: Keep first and last layers at full capacity
+- 🔬 **Data-Driven Selection**: Combine with layer importance analysis
+- ⚡ **Full Compatibility**: Works with all MLP_GLU features (expansion_rate, expansion_divisor, dataloader)
+
+**Use Cases:**
+- Preserve embedding and output layers while pruning middle layers
+- Target specific layer ranges based on importance analysis
+- Implement asymmetric pruning strategies for domain adaptation
+- Experiment with different layer-wise pruning patterns
+
 ### Hardware-Optimized Pruning with expansion_divisor (NEW in v0.2.0)
 
 The `expansion_divisor` parameter ensures that intermediate layer sizes are divisible by specific values (32, 64, 128, or 256), optimizing performance on modern GPUs and TPUs.
@@ -268,6 +310,48 @@ pruned_model.save_pretrained("./pruned-optimized-model")
 **Valid Values:** `None` (default, no rounding), `32`, `64`, `128`, `256`
 
 **Note:** Cannot be used alone—requires either `pruning_percentage` or `expansion_rate`.
+
+### Selective Layer Width Pruning (NEW in v0.2.0)
+
+Prune neurons only in specific layers while leaving others unchanged. Perfect for preserving critical layers or implementing layer-specific optimization strategies.
+
+```python
+from transformers import AutoModelForCausalLM
+from optipfair import prune_model
+
+# Load a pre-trained model
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+
+# Prune neurons only in specific layers (e.g., middle layers)
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",
+    pruning_percentage=30,
+    layer_indices=[5, 10, 15, 20, 25],  # Only prune these layers
+    show_progress=True,
+    return_stats=True
+)
+
+# Print pruning statistics
+print(f"Pruned {stats['pruned_layers']} of {stats['total_layers']} layers")
+print(f"Total reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)
+
+# Save the pruned model
+pruned_model.save_pretrained("./selective-pruned-llama")
+```
+
+**Key Benefits:**
+- 🎯 **Precision Control**: Choose exactly which layers to optimize
+- 🛡️ **Preserve Critical Layers**: Keep first and last layers at full capacity
+- 🔬 **Data-Driven Selection**: Combine with layer importance analysis
+- ⚡ **Full Compatibility**: Works with all MLP_GLU features (expansion_rate, expansion_divisor, dataloader)
+
+**Use Cases:**
+- Preserve embedding and output layers while pruning middle layers
+- Target specific layer ranges based on importance analysis
+- Implement asymmetric pruning strategies for domain adaptation
+- Experiment with different layer-wise pruning patterns
 
 ### Pruning Transformer Layers (Depth Pruning)
 
@@ -415,6 +499,9 @@ The optipfair project is actively developed. Here's what's planned for the futur
 ### Future Roadmap
 Our goal is to make optipfair the go-to toolkit for efficient and fair model optimization. Key upcoming features include:
 
+* **Selective Layer Width Pruning**: Implemented in v0.2.0 ✓ - Prune neurons in specific layers using layer_indices
+* **Data-Driven Width Pruning**: Implemented in v0.2.0 ✓ - Hybrid importance with calibration data
+* **Hardware-Optimized Pruning**: Implemented in v0.2.0 ✓ - expansion_divisor for GPU optimization
 * **Attention Pruning**: Implementing Attention Bypass and Adaptive Attention Bypass(AAB).
 * **Advanced Benchmarks**: Integrating more comprehensive performance and evaluation benchmarks.
 * **GPU Optimizations**: Creating a v2.0 with significant GPU-specific optimizations for faster execution. 
@@ -427,11 +514,13 @@ Contributions are welcome! Whether it's bug reports, feature requests, or code c
 If you use optipfair in your research or projects, please cite the library:
 
 ```bibtex
-@software{optipfair,
-  author = {Pere Martra},
-  title = {optipfair: A Library for Structured Pruning and Bias Visualization of Large Language Models},
+@misc{Martra2024optipfair,
+  author = {Martra, Pere},
+  title = {{optipfair: A Library for Structured Pruning and Bias Visualization of Large Language Models}},
   year = {2024},
-  url = {https://github.com/peremartra/optipfair}
+  howpublished = {GitHub Repository},
+  url = {https://github.com/peremartra/optipfair},
+  note = {Versión 0.2.0, accedido 14 Noviembre 2025}
 }
 ```
 ### License
