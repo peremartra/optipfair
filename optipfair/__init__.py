@@ -14,7 +14,7 @@ from .pruning.depth import prune_model_depth, analyze_layer_importance
 
 from .pruning.utils import get_pruning_statistics
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 # Configure logging
 logging.basicConfig(
@@ -59,7 +59,8 @@ def prune_model(
         show_progress: Whether to show progress during pruning
         return_stats: Whether to return pruning statistics along with the model
         num_layers_to_remove: Number of layers to remove - for DEPTH only
-        layer_indices: Specific layer indices to remove - for DEPTH only
+        layer_indices: Specific layer indices to operate on. For DEPTH pruning: layers to remove.
+            For MLP_GLU pruning: layers to prune (other layers remain unchanged). If None, all layers are affected.
         depth_pruning_percentage: Percentage of layers to remove - for DEPTH only
         layer_selection_method: Method for selecting layers ("last", "first", "custom") - for DEPTH only
         
@@ -81,6 +82,7 @@ def prune_model(
             expansion_rate=expansion_rate,
             expansion_divisor=expansion_divisor,
             dataloader=dataloader,
+            layer_indices=layer_indices,
             show_progress=show_progress,
         )
     elif pruning_type == "DEPTH":

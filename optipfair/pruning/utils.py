@@ -127,22 +127,53 @@ def get_pruning_statistics(
     reduction = original_params - pruned_params
     percentage_reduction = (reduction / original_params) * 100
     
-    # Get expansion rate if possible
+    # Get expansion rate and layer information if possible
     expansion_rate = None
+    pruned_layer_count = None
+    total_layer_count = None
+    
     try:
         layers = get_model_layers(pruned_model)
         if layers:
+            total_layer_count = len(layers)
+            
+            # Check for MLP structure
             first_mlp = layers[0].mlp
             intermediate_size = first_mlp.gate_proj.out_features
             hidden_size = first_mlp.gate_proj.in_features
             expansion_rate = (intermediate_size / hidden_size) * 100
+            
+            # Check if selective pruning was applied (different intermediate sizes)
+            intermediate_sizes = set()
+            for layer in layers:
+                try:
+                    intermediate_sizes.add(layer.mlp.gate_proj.out_features)
+                except:
+                    pass
+            
+            # If we have multiple intermediate sizes, count how many were pruned
+            if len(intermediate_sizes) > 1:
+                original_layers = get_model_layers(original_model)
+                if original_layers:
+                    original_intermediate_size = original_layers[0].mlp.gate_proj.out_features
+                    pruned_layer_count = sum(
+                        1 for layer in layers
+                        if layer.mlp.gate_proj.out_features < original_intermediate_size
+                    )
     except Exception:
         pass
     
-    return {
+    stats = {
         "original_parameters": original_params,
         "pruned_parameters": pruned_params,
         "reduction": reduction,
         "percentage_reduction": percentage_reduction,
         "expansion_rate": expansion_rate
     }
+    
+    # Add selective pruning info if available
+    if pruned_layer_count is not None and total_layer_count is not None:
+        stats["pruned_layers"] = pruned_layer_count
+        stats["total_layers"] = total_layer_count
+    
+    return stats

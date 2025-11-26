@@ -106,6 +106,39 @@ pruned_model, stats = prune_model(
     return_stats=True
 )
 
+# Selective Width Pruning (NEW in v0.2.0) - Prune specific MLP layers only
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",              # Width pruning
+    neuron_selection_method="MAW",
+    pruning_percentage=20,
+    layer_indices=[0, 5, 10, 15, 20],    # Only prune these specific layers
+    show_progress=True,
+    return_stats=True
+)
+
+# Selective width pruning with expansion_rate
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    expansion_rate=260,                  # Target expansion rate
+    layer_indices=[1, 3, 5, 7],          # Only prune odd-indexed layers
+    show_progress=True,
+    return_stats=True
+)
+
+# Selective data-driven width pruning
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",
+    pruning_percentage=25,
+    dataloader=calibration_dataloader,
+    layer_indices=[2, 4, 6, 8],          # Only prune these layers with data-driven method
+    show_progress=True,
+    return_stats=True
+)
+
 # Print pruning statistics
 print(f"Original parameters: {stats['original_parameters']:,}")
 print(f"Pruned parameters: {stats['pruned_parameters']:,}")
@@ -152,6 +185,23 @@ optipfair prune \
   --model-path meta-llama/Llama-3.2-1B \
   --pruning-type DEPTH \
   --layer-indices "2,5,8,11" \
+  --output-path ./pruned-model
+
+# Selective width pruning - prune neurons only in specific layers
+optipfair prune \
+  --model-path meta-llama/Llama-3.2-1B \
+  --pruning-type MLP_GLU \
+  --method MAW \
+  --pruning-percentage 20 \
+  --layer-indices "0,5,10,15,20" \
+  --output-path ./pruned-model
+
+# Selective width pruning with expansion_rate
+optipfair prune \
+  --model-path meta-llama/Llama-3.2-1B \
+  --pruning-type MLP_GLU \
+  --expansion-rate 260 \
+  --layer-indices "1,3,5,7" \
   --output-path ./pruned-model
 ```
 
@@ -257,6 +307,204 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
        neuron_selection_method="PON",
        pruning_percentage=20
    )
+   ```
+
+### Selective Layer Width Pruning (NEW in v0.2.0)
+
+The `layer_indices` parameter is now supported for MLP_GLU pruning, allowing you to prune neurons only in specific layers while leaving others unchanged. This provides fine-grained control over which parts of your model to optimize.
+
+#### Benefits of Selective Width Pruning
+
+1. **Preserve Critical Layers**: Keep important layers (e.g., first and last) at full capacity while pruning middle layers
+2. **Domain Adaptation**: Prune different layers based on layer importance analysis for your specific use case
+3. **Experimental Flexibility**: Test different pruning strategies on specific layer subsets
+4. **Hybrid Approaches**: Combine selective pruning with data-driven methods for optimal results
+
+#### Basic Selective Width Pruning
+
+```python
+from optipfair import prune_model
+
+# Prune only specific layers (others remain unchanged)
+pruned_model = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    pruning_percentage=30,
+    layer_indices=[5, 10, 15, 20],  # Only these layers will be pruned
+    show_progress=True
+)
+
+# Prune all except first and last layers
+num_layers = len(model.model.layers)
+pruned_model = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    pruning_percentage=25,
+    layer_indices=list(range(1, num_layers - 1)),  # Skip layer 0 and last
+    show_progress=True
+)
+```
+
+#### Combining with Other Features
+
+Selective pruning works seamlessly with all MLP_GLU features:
+
+```python
+# With expansion_rate
+pruned_model = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    expansion_rate=260,
+    layer_indices=[2, 4, 6, 8],
+    show_progress=True
+)
+
+# With expansion_divisor for hardware optimization
+pruned_model = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    pruning_percentage=20,
+    expansion_divisor=128,
+    layer_indices=[0, 10, 20],
+    show_progress=True
+)
+
+# With data-driven pruning
+pruned_model = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",
+    pruning_percentage=25,
+    dataloader=calibration_dataloader,
+    layer_indices=[5, 10, 15],  # Only these layers use calibration data
+    show_progress=True
+)
+
+# All methods (MAW, VOW, PON) support selective pruning
+pruned_model = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="VOW",  # or "PON"
+    pruning_percentage=20,
+    layer_indices=[1, 3, 5, 7, 9],
+    show_progress=True
+)
+```
+
+#### Selective Pruning with Statistics
+
+When using selective pruning, statistics include information about which layers were pruned:
+
+```python
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    pruning_percentage=30,
+    layer_indices=[0, 5, 10, 15, 20],
+    return_stats=True,
+    show_progress=True
+)
+
+print(f"Total layers: {stats['total_layers']}")
+print(f"Pruned layers: {stats['pruned_layers']}")
+print(f"Unchanged layers: {stats['total_layers'] - stats['pruned_layers']}")
+print(f"Parameter reduction: {stats['percentage_reduction']:.2f}%")
+```
+
+#### Error Handling and Validation
+
+OptiPFair provides comprehensive validation for `layer_indices`:
+
+```python
+# Valid usage
+pruned_model = prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    pruning_percentage=20,
+    layer_indices=[0, 5, 10],  # Valid indices
+    show_progress=True
+)
+
+# Invalid usage examples (will raise errors)
+try:
+    # Empty list
+    prune_model(model, layer_indices=[])
+except ValueError as e:
+    print(f"Error: {e}")  # "layer_indices cannot be an empty list"
+
+try:
+    # Out of range indices
+    prune_model(model, layer_indices=[0, 999])
+except ValueError as e:
+    print(f"Error: {e}")  # "Invalid layer indices: [999]"
+
+try:
+    # Duplicate indices
+    prune_model(model, layer_indices=[5, 5, 10])
+except ValueError as e:
+    print(f"Error: {e}")  # "layer_indices contains duplicate values"
+
+try:
+    # Non-integer values
+    prune_model(model, layer_indices=[0, "5", 10])
+except TypeError as e:
+    print(f"Error: {e}")  # "All elements in layer_indices must be integers"
+```
+
+#### Backward Compatibility
+
+`layer_indices=None` (default) maintains backward compatibility by pruning all layers:
+
+```python
+# These are equivalent:
+pruned_model = prune_model(model, pruning_percentage=20)
+pruned_model = prune_model(model, pruning_percentage=20, layer_indices=None)
+```
+
+#### Best Practices for Selective Width Pruning
+
+1. **Preserve First and Last Layers**: These often contain critical information
+   ```python
+   num_layers = len(model.model.layers)
+   middle_layers = list(range(1, num_layers - 1))
+   pruned_model = prune_model(model, pruning_percentage=30, layer_indices=middle_layers)
+   ```
+
+2. **Use Layer Importance Analysis**: Identify less important layers before selective pruning
+   ```python
+   from optipfair import analyze_layer_importance
+   
+   importance_scores = analyze_layer_importance(model, dataloader)
+   sorted_layers = sorted(importance_scores.items(), key=lambda x: x[1])
+   least_important = [idx for idx, score in sorted_layers[:10]]
+   
+   pruned_model = prune_model(model, pruning_percentage=25, layer_indices=least_important)
+   ```
+
+3. **Combine with Data-Driven Pruning**: Use calibration data for selected layers
+   ```python
+   pruned_model = prune_model(
+       model=model,
+       neuron_selection_method="MAW",
+       pruning_percentage=20,
+       dataloader=calibration_dataloader,
+       layer_indices=[5, 10, 15, 20],  # Focus calibration on these layers
+       show_progress=True
+   )
+   ```
+
+4. **Test Different Strategies**: Experiment with different layer selections
+   ```python
+   # Strategy 1: Prune early layers
+   early_pruned = prune_model(model, pruning_percentage=20, layer_indices=list(range(0, 10)))
+   
+   # Strategy 2: Prune middle layers
+   middle_pruned = prune_model(model, pruning_percentage=20, layer_indices=list(range(10, 20)))
+   
+   # Strategy 3: Prune alternating layers
+   alternating_pruned = prune_model(model, pruning_percentage=20, layer_indices=list(range(0, 32, 2)))
+   
+   # Evaluate each to find the best strategy for your use case
    ```
 
 ### Layer Selection Methods for Depth Pruning

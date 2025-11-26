@@ -26,7 +26,11 @@ logger = logging.getLogger(__name__)
 _accumulated_act_norms = {}
 
 
-def setup_mlp_hooks_for_importance(model: PreTrainedModel, device: torch.device) -> List:
+def setup_mlp_hooks_for_importance(
+    model: PreTrainedModel,
+    device: torch.device,
+    layer_indices: Optional[List[int]] = None
+) -> List:
     """
     Register forward hooks on down_proj layers to capture input activations (X_d).
     
@@ -39,6 +43,8 @@ def setup_mlp_hooks_for_importance(model: PreTrainedModel, device: torch.device)
     Args:
         model: Pre-trained model with transformer layers
         device: Device where the model is located
+        layer_indices: Optional list of layer indices to register hooks on.
+            If None, registers hooks on all layers.
         
     Returns:
         handles: List of hook handles (must be removed after calibration)
@@ -64,8 +70,14 @@ def setup_mlp_hooks_for_importance(model: PreTrainedModel, device: torch.device)
     if not layers:
         raise ValueError("Could not find transformer layers in model")
     
-    # Initialize storage on CPU to save VRAM
-    for idx, layer in enumerate(layers):
+    # Filter layers if layer_indices specified
+    if layer_indices is not None:
+        layers_to_hook = [(idx, layers[idx]) for idx in layer_indices]
+    else:
+        layers_to_hook = list(enumerate(layers))
+    
+    # Initialize storage on CPU to save VRAM (only for selected layers)
+    for idx, layer in layers_to_hook:
         intermediate_size = layer.mlp.down_proj.in_features
         _accumulated_act_norms[idx] = torch.zeros(
             intermediate_size,
@@ -98,12 +110,15 @@ def setup_mlp_hooks_for_importance(model: PreTrainedModel, device: torch.device)
         
         return hook
     
-    # Register hooks on all down_proj layers
-    for idx, layer in enumerate(layers):
+    # Register hooks on selected down_proj layers
+    for idx, layer in layers_to_hook:
         handle = layer.mlp.down_proj.register_forward_hook(make_hook(idx))
         handles.append(handle)
     
-    logger.info(f"Registered {len(handles)} hooks on down_proj layers for activation capture")
+    if layer_indices is not None:
+        logger.info(f"Registered {len(handles)} hooks on down_proj layers {layer_indices} for activation capture")
+    else:
+        logger.info(f"Registered {len(handles)} hooks on all down_proj layers for activation capture")
     
     return handles
 
@@ -483,6 +498,7 @@ def prune_model_mlp_glu(
     expansion_rate: Optional[float] = None,
     expansion_divisor: Optional[int] = None,
     dataloader: Optional[Any] = None,
+    layer_indices: Optional[List[int]] = None,
     show_progress: bool = True,
 ) -> PreTrainedModel:
     """
@@ -499,6 +515,8 @@ def prune_model_mlp_glu(
         dataloader: Optional DataLoader for data-driven pruning. When provided with
             neuron_selection_method='MAW', enables hybrid importance calculation using
             both weight magnitudes and activation statistics. Only compatible with 'MAW'.
+        layer_indices: Optional list of layer indices to prune. If None, all layers are pruned.
+            When specified, only the listed layers will have their neurons pruned; other layers remain unchanged.
         show_progress: Whether to show progress during pruning
         
     Returns:
@@ -507,6 +525,33 @@ def prune_model_mlp_glu(
     # Validate the model for GLU pruning
     if not validate_model_for_glu_pruning(model):
         raise ValueError("Model is not compatible with GLU pruning. It must have gate_proj, up_proj, and down_proj layers.")
+    
+    # Validate layer_indices if provided
+    layers = get_model_layers(model)
+    if not layers:
+        raise ValueError("Could not find MLP layers in the model.")
+    
+    if layer_indices is not None:
+        if not isinstance(layer_indices, list):
+            raise TypeError(f"layer_indices must be a list, got {type(layer_indices)}")
+        
+        if not all(isinstance(idx, int) for idx in layer_indices):
+            raise TypeError("All elements in layer_indices must be integers")
+        
+        if not layer_indices:
+            raise ValueError("layer_indices cannot be an empty list")
+        
+        invalid_indices = [idx for idx in layer_indices if idx < 0 or idx >= len(layers)]
+        if invalid_indices:
+            raise ValueError(
+                f"Invalid layer indices: {invalid_indices}. "
+                f"Model has {len(layers)} layers (valid indices: 0-{len(layers)-1})"
+            )
+        
+        if len(layer_indices) != len(set(layer_indices)):
+            raise ValueError("layer_indices contains duplicate values")
+        
+        logger.info(f"Selective pruning: will prune {len(layer_indices)} of {len(layers)} layers: {sorted(layer_indices)}")
     
     # Validate expansion_divisor
     if expansion_divisor is not None:
@@ -574,8 +619,8 @@ def prune_model_mlp_glu(
         
         device = next(model.parameters()).device
         
-        # Step 1: Register hooks to capture activations
-        handles = setup_mlp_hooks_for_importance(model, device)
+        # Step 1: Register hooks to capture activations (only on selected layers)
+        handles = setup_mlp_hooks_for_importance(model, device, layer_indices=layer_indices)
         
         try:
             # Step 2: Run forward passes to collect statistics
@@ -604,17 +649,24 @@ def prune_model_mlp_glu(
     # PRUNING
     # ==============================================================================
 
-    # Get all layers to prune
-    layers = get_model_layers(model)
-    if not layers:
-        raise ValueError("Could not find MLP layers in the model.")
+    # Filter layers to prune if layer_indices specified
+    if layer_indices is not None:
+        layers_to_prune = [(idx, layers[idx]) for idx in sorted(layer_indices)]
+        if show_progress:
+            iterator = tqdm(layers_to_prune, desc=f"Pruning {len(layers_to_prune)} selected layers")
+        else:
+            iterator = layers_to_prune
+    else:
+        layers_to_prune = list(enumerate(layers))
+        if show_progress:
+            iterator = tqdm(layers_to_prune, desc="Pruning all layers")
+        else:
+            iterator = layers_to_prune
     
     new_intermediate_size = None
     
-    # Prune each layer
-    iterator = tqdm(layers, desc="Pruning layers") if show_progress else layers
-    
-    for idx, layer in enumerate(iterator):
+    # Prune each selected layer
+    for idx, layer in iterator:
         mlp = layer.mlp
         
         # Store original size

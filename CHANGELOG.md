@@ -1,3 +1,82 @@
+## [0.2.2] - 2025-11-26
+
+### 🎉 New Features
+
+#### Selective Layer Width Pruning
+- **layer_indices for MLP_GLU**: Extended `layer_indices` parameter to support selective neuron pruning in specific layers
+- **Contextual Usage**: For DEPTH pruning, specifies layers to remove; for MLP_GLU, specifies layers to prune
+- **Preservation Strategy**: Allows preserving critical layers (e.g., first/last) at full capacity while pruning others
+- **Full Compatibility**: Works seamlessly with all MLP_GLU features (expansion_rate, expansion_divisor, dataloader, all methods)
+
+#### Simplified Hybrid Importance Calculation
+- **Optimized MAW Hybrid**: Simplified `compute_neuron_pair_importance_maw_hybrid()` to use simple MAW for gate_proj and up_proj
+- **Focused Complexity**: Maintains complex activation-weighted calculation only for down_proj where it has most impact
+- **Better Performance**: Faster execution by reducing unnecessary calculations
+- **Consistent Formula**: Uses same MAW method (max + |min|) as static pruning for gate/up components
+
+### ✨ Enhancements
+
+- **Extended API**: `layer_indices` parameter now works for both DEPTH and MLP_GLU pruning types
+- **Smart Validation**: Comprehensive error checking for layer indices (range, duplicates, empty lists, types)
+- **Enhanced Statistics**: `get_pruning_statistics()` now reports selective pruning info (pruned_layers, total_layers)
+- **Selective Calibration**: Hooks only registered on selected layers when using data-driven pruning with layer_indices
+- **CLI Support**: Updated `--layer-indices` help text to mention both pruning types
+- **Backward Compatible**: `layer_indices=None` maintains default behavior (prunes all layers)
+
+### 🔧 Technical Details
+
+#### Modified Functions
+- `prune_model()`: Updated docstring and passes `layer_indices` to `prune_model_mlp_glu()`
+- `prune_model_mlp_glu()`: Added `layer_indices` parameter with full validation and filtering logic
+- `setup_mlp_hooks_for_importance()`: Now accepts `layer_indices` to register hooks only on selected layers
+- `compute_neuron_pair_importance_maw_hybrid()`: Simplified to use MAW for gate/up, complex calculation only for down
+- `get_pruning_statistics()`: Detects and reports selective pruning information
+- CLI `commands.py`: Removed restriction blocking `layer_indices` for MLP_GLU, added parsing logic
+
+### 📚 Documentation
+
+- **README.md**: New "Selective Layer Width Pruning" section with examples and use cases
+- **Reference Manual**: Comprehensive section with 4+ usage examples and best practices
+- **New Example File**: `examples/selective_layer_width_pruning.py` with 5 complete examples
+- **Updated Roadmap**: Marked selective pruning as completed in v0.2.2
+- **API Documentation**: Updated parameter descriptions for contextual meaning
+
+### 🧪 Testing
+
+- Complete test suite in `tests/test_selective_layer_pruning.py`
+- 12 comprehensive test cases covering:
+  - Basic selective pruning (single and multiple layers)
+  - All neuron selection methods (MAW, VOW, PON)
+  - Compatibility with expansion_rate and expansion_divisor
+  - Data-driven pruning with layer_indices
+  - Invalid input handling and validation
+  - Statistics reporting
+  - Weight preservation in unpruned layers
+  - Result consistency and reproducibility
+
+### 💡 Use Cases
+
+1. **Preserve Critical Layers**: Keep first and last layers at full capacity
+2. **Importance-Based**: Target least important layers identified by analysis
+3. **Domain Adaptation**: Implement asymmetric pruning strategies
+4. **Experimental**: Test different layer-wise pruning patterns
+
+### 🔒 Compatibility
+
+- Fully backward compatible with v0.2.1
+- Works with all neuron selection methods (MAW, VOW, PON)
+- Compatible with both static and data-driven pruning
+- Integrates with expansion_rate and expansion_divisor
+
+### ⚠️ Important Notes
+
+- `layer_indices` validation ensures indices are valid, unique integers within model range
+- Empty lists raise `ValueError`
+- Selective pruning with dataloader only calibrates on specified layers (more efficient)
+- Statistics include `pruned_layers` and `total_layers` when selective pruning is detected
+
+---
+
 ## [0.2.1] - 2025-11-24
 
 ### 🎉 New Features
