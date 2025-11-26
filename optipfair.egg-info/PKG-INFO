@@ -2,51 +2,40 @@ Metadata-Version: 2.4
 Name: optipfair
 Version: 0.2.1
 Summary: A library for structured pruning & Bias visualization of large language models
-Home-page: https://github.com/peremartra/optipfair
-Author: Pere Martra
-Author-email: peremartra@uadla.com
-Classifier: Programming Language :: Python :: 3
-Classifier: License :: OSI Approved :: Apache Software License
-Classifier: Operating System :: OS Independent
+Author-email: Pere Martra <peremartra@uadla.com>
+License: Apache-2.0
+Project-URL: Homepage, https://github.com/peremartra/optipfair
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.14
 Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
-Requires-Python: >=3.8
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.14
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: torch>=1.10.0
-Requires-Dist: transformers>=4.25.0
+Requires-Dist: torch>=2.9.1
+Requires-Dist: transformers>=4.57.3
 Requires-Dist: tqdm>=4.62.0
 Requires-Dist: click>=8.0.0
 Provides-Extra: dev
-Requires-Dist: pytest>=7.0.0; extra == "dev"
-Requires-Dist: black>=22.0.0; extra == "dev"
-Requires-Dist: flake8>=4.0.0; extra == "dev"
-Requires-Dist: isort>=5.10.0; extra == "dev"
-Requires-Dist: mypy>=0.900; extra == "dev"
+Requires-Dist: pre-commit>=4.5.0; extra == "dev"
+Requires-Dist: pytest>=9.0.1; extra == "dev"
+Requires-Dist: pytest-cov>=7.0.0; extra == "dev"
+Requires-Dist: mypy>=1.18.2; extra == "dev"
 Provides-Extra: eval
-Requires-Dist: datasets>=2.0.0; extra == "eval"
-Requires-Dist: numpy>=1.20.0; extra == "eval"
-Requires-Dist: pandas>=1.3.0; extra == "eval"
+Requires-Dist: datasets>=4.4.1; extra == "eval"
+Requires-Dist: numpy>=2.3.5; extra == "eval"
+Requires-Dist: pandas>=2.3.3; extra == "eval"
 Requires-Dist: matplotlib>=3.5.0; extra == "eval"
 Requires-Dist: seaborn>=0.11.0; extra == "eval"
 Provides-Extra: viz
 Requires-Dist: matplotlib>=3.5.0; extra == "viz"
 Requires-Dist: seaborn>=0.11.0; extra == "viz"
-Requires-Dist: numpy>=1.20.0; extra == "viz"
-Requires-Dist: pandas>=1.3.0; extra == "viz"
+Requires-Dist: numpy>=2.3.5; extra == "viz"
+Requires-Dist: pandas>=2.3.3; extra == "viz"
 Requires-Dist: scikit-learn>=1.0.0; extra == "viz"
-Dynamic: author
-Dynamic: author-email
-Dynamic: classifier
-Dynamic: description
-Dynamic: description-content-type
-Dynamic: home-page
 Dynamic: license-file
-Dynamic: provides-extra
-Dynamic: requires-dist
-Dynamic: requires-python
-Dynamic: summary
 
 # optipfair
 
@@ -350,13 +339,13 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Define prompt pairs that differ in demographic attributes
 prompt_pairs = [
-    ("The white man walked through the neighborhood. The police officer thought he", 
+    ("The white man walked through the neighborhood. The police officer thought he",
      "The Black man walked through the neighborhood. The police officer thought he")
 ]
 
 # Generate visualizations and get bias metrics
 _, metrics = visualize_bias(
-    model, 
+    model,
     tokenizer,
     prompt_pairs=prompt_pairs,
     visualization_types=["mean_diff", "pca"],
@@ -399,7 +388,7 @@ optipfair offers two powerful structured pruning strategies:
     * **Number**: `num_layers_to_remove=4`
     * **Percentage**: `depth_pruning_percentage=25`
     * **Specific Indices**: `layer_indices=[12, 13, 14, 15]`
-  
+
 ### Understanding Model Internals: Layer Importance Analysis
 Before deciding which layers to remove with Depth Pruning, you can assess their relative importance. optipfair provides a method based on the cosine similarity between a layer's input and output embeddings.
 
@@ -417,8 +406,8 @@ Our goal is to make optipfair the go-to toolkit for efficient and fair model opt
 
 * **Attention Pruning**: Implementing Attention Bypass and Adaptive Attention Bypass(AAB).
 * **Advanced Benchmarks**: Integrating more comprehensive performance and evaluation benchmarks.
-* **GPU Optimizations**: Creating a v2.0 with significant GPU-specific optimizations for faster execution. 
-* **Large-Scale Model Support**: Adding compatibility for DeepSpeed and FSDP to handle 70B+ models efficiently. 
+* **GPU Optimizations**: Creating a v2.0 with significant GPU-specific optimizations for faster execution.
+* **Large-Scale Model Support**: Adding compatibility for DeepSpeed and FSDP to handle 70B+ models efficiently.
 
 ### 🤝 Contributing
 Contributions are welcome! Whether it's bug reports, feature requests, or code contributions, please check out our [contributing guidelines](CONTRIBUTING.md) to get started.
@@ -427,11 +416,13 @@ Contributions are welcome! Whether it's bug reports, feature requests, or code c
 If you use optipfair in your research or projects, please cite the library:
 
 ```bibtex
-@software{optipfair,
-  author = {Pere Martra},
-  title = {optipfair: A Library for Structured Pruning and Bias Visualization of Large Language Models},
+@misc{Martra2024optipfair,
+  author = {Martra, Pere},
+  title = {{optipfair: A Library for Structured Pruning and Bias Visualization of Large Language Models}},
   year = {2024},
-  url = {https://github.com/peremartra/optipfair}
+  howpublished = {GitHub Repository},
+  url = {https://github.com/peremartra/optipfair},
+  note = {Versión 0.2.0, accedido 14 Noviembre 2025}
 }
 ```
 ### License

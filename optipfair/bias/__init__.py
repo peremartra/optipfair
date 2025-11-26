@@ -6,13 +6,13 @@ process information differently based on protected attributes (e.g., race, gende
 It enables detailed analysis of activation patterns to identify potential bias.
 """
 
+from .metrics import calculate_bias_metrics
 from .visualization import (
     visualize_bias,
-    visualize_mean_differences,
     visualize_heatmap,
+    visualize_mean_differences,
     visualize_pca,
 )
-from .metrics import calculate_bias_metrics
 
 __all__ = [
     "visualize_bias",

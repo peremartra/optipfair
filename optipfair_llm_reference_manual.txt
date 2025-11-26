@@ -55,14 +55,14 @@ pruned_model, stats = prune_model(
     show_progress=True,                  # Show progress during pruning
     return_stats=True                    # Return pruning statistics
 )
-#If expansion_rate is specified pruning_percentatge must be set to None 
+#If expansion_rate is specified pruning_percentatge must be set to None
 
 # Data-driven MLP GLU pruning (NEW - with calibration data)
 from torch.utils.data import DataLoader, TensorDataset
 
 # Prepare calibration dataloader
 calibration_texts = load_calibration_data()  # Your function
-inputs = tokenizer(calibration_texts, return_tensors="pt", padding=True, 
+inputs = tokenizer(calibration_texts, return_tensors="pt", padding=True,
                   truncation=True, max_length=512)
 dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
 dataloader = DataLoader(dataset, batch_size=8)
@@ -171,9 +171,9 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
 ```
 
    **With expansion_divisor:**
-   
+
    The `expansion_divisor` parameter ensures that the intermediate layer size is divisible by a specific value (32, 64, 128, or 256). This is useful for hardware optimization, as many accelerators perform better with tensor dimensions that are multiples of certain values.
-   
+
    ```python
    # Round intermediate size to nearest multiple of 128
    pruned_model = prune_model(
@@ -182,7 +182,7 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
        pruning_percentage=20,
        expansion_divisor=128  # Intermediate size will be divisible by 128
    )
-   
+
    # Can also be used with expansion_rate
    pruned_model = prune_model(
        model=model,
@@ -191,7 +191,7 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
        expansion_divisor=64  # Intermediate size will be divisible by 64
    )
    ```
-   
+
    **Key considerations for expansion_divisor:**
    - Valid values: `None` (default), `32`, `64`, `128`, `256`
    - Cannot be used alone - requires either `pruning_percentage` or `expansion_rate`
@@ -201,15 +201,15 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
    - Common practice: use 128 or 256 for modern GPUs
 
    **Data-Driven MAW (hybrid: weights + activations):**
-   
+
    When you provide a dataloader, MAW switches to a hybrid importance calculation that combines:
    - Static weight magnitudes from `gate_proj` and `up_proj` layers
    - Dynamic activation statistics from `down_proj` captured during calibration
-   
+
    This data-driven approach implements the CFSP methodology (arXiv:2409.13199v2) and typically produces better pruned models that retain more of the original model's capabilities.
 ```python
    from torch.utils.data import DataLoader, TensorDataset
-   
+
    # Prepare calibration dataloader
    texts = ["Sample text 1", "Sample text 2", ...]  # Your calibration data
    inputs = tokenizer(
@@ -221,7 +221,7 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
    )
    dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
    calibration_dataloader = DataLoader(dataset, batch_size=8)
-   
+
    # Data-driven pruning with calibration
    pruned_model = prune_model(
        model=model,
@@ -231,7 +231,7 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
        show_progress=True
    )
 ```
-   
+
    **Key considerations for data-driven pruning:**
    - Use a representative calibration dataset (100-1000 samples recommended)
    - Domain-specific data works best (e.g., medical texts for medical models)
@@ -479,13 +479,13 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Define prompt pairs that differ in demographic attributes
 prompt_pairs = [
-    ("The white man walked through the neighborhood. The police officer thought he", 
+    ("The white man walked through the neighborhood. The police officer thought he",
      "The Black man walked through the neighborhood. The police officer thought he")
 ]
 
 # Generate visualizations and get bias metrics
 _, metrics = visualize_bias(
-    model, 
+    model,
     tokenizer,
     prompt_pairs=prompt_pairs,
     visualization_types=["mean_diff", "pca"],
@@ -531,8 +531,8 @@ When using individual visualization functions like `visualize_pca`, `visualize_h
 ```python
 # Target a specific named layer directly
 visualize_pca(
-    model, 
-    tokenizer, 
+    model,
+    tokenizer,
     prompt_pair=prompt_pairs[0],
     layer_key="attention_output_layer_2",  # Exact layer name
     output_dir="./bias_analysis_specific_layer"
@@ -565,10 +565,10 @@ from optipfair.bias import visualize_mean_differences
 
 # Visualize mean activation differences in MLP layers
 visualize_mean_differences(
-    model, 
-    tokenizer, 
+    model,
+    tokenizer,
     prompt_pair=("The white doctor examined the patient. The nurse thought",
-                 "The Black doctor examined the patient. The nurse thought"), 
+                 "The Black doctor examined the patient. The nurse thought"),
     layer_type="mlp_output",  # Focus on MLP outputs
     layers="first_middle_last",  # Look at representative layers
     output_dir="./bias_analysis",
@@ -585,10 +585,10 @@ visualize_mean_differences(
 
 # You can also target a specific layer directly:
 visualize_mean_differences(
-    model, 
-    tokenizer, 
+    model,
+    tokenizer,
     prompt_pair=("The white doctor examined the patient. The nurse thought",
-                 "The Black doctor examined the patient. The nurse thought"), 
+                 "The Black doctor examined the patient. The nurse thought"),
     layer_type="mlp_output",
     layers="all",  # Include all layers of this type
     output_dir="./bias_analysis_all_mlp_layers",
@@ -606,8 +606,8 @@ Create detailed heatmaps showing activation differences in specific layers:
 from optipfair.bias import visualize_heatmap
 
 visualize_heatmap(
-    model, 
-    tokenizer, 
+    model,
+    tokenizer,
     prompt_pair=("The white doctor examined the patient. The nurse thought",
                  "The Black doctor examined the patient. The nurse thought"),
     layer_key="attention_output_layer_8",
@@ -626,8 +626,8 @@ Perform principal component analysis to visualize how activations differ in a re
 from optipfair.bias import visualize_pca
 
 visualize_pca(
-    model, 
-    tokenizer, 
+    model,
+    tokenizer,
     prompt_pair=("The white doctor examined the patient. The nurse thought",
                  "The Black doctor examined the patient. The nurse thought"),
     layer_key="attention_output_layer_8",
@@ -652,7 +652,7 @@ prompt_pairs = [
         "The white man was walking at night carrying a bag. The police officer thought he",
         "The Black man was walking at night carrying a bag. The police officer thought he"
     ),
-    
+
     # Gender-related
     (
         "The male engineer proposed a solution to the technical problem. The team thought it was",
@@ -675,7 +675,7 @@ _, metrics = visualize_bias(
 for pair_key, pair_data in metrics.items():
     print(f"\n{pair_key}:")
     print(f"  Overall mean difference: {pair_data['metrics']['overall_metrics']['mean_difference']:.6f}")
-    
+
     # Print component-specific metrics
     for component, comp_data in pair_data["metrics"]["component_metrics"].items():
         if "progression_metrics" in comp_data:
@@ -701,7 +701,7 @@ prompt_pairs = generate_prompt_pairs(
 )
 
 visualize_bias(
-    model, 
+    model,
     tokenizer,
     prompt_pairs=prompt_pairs,
     visualization_types=["mean_diff", "pca"],
@@ -734,12 +734,12 @@ for layer, layer_metrics in metrics["layer_metrics"].items():
 print("\nComponent Metrics:")
 for component, comp_metrics in metrics["component_metrics"].items():
     print(f"  {component}: {comp_metrics['mean_difference']:.6f}")
-    
+
     if "progression_metrics" in comp_metrics:
         prog = comp_metrics["progression_metrics"]
         print(f"    First-to-last ratio: {prog['first_to_last_ratio']:.2f}")
         print(f"    Increasing trend: {prog['is_increasing']}")
-        
+
 print("\nOverall Metrics:")
 print(f"  Mean difference: {metrics['overall_metrics']['mean_difference']:.6f}")
 print(f"  Max difference: {metrics['overall_metrics']['max_difference']:.6f}")
@@ -787,7 +787,7 @@ print(importance_scores)
 The `analyze_layer_importance` function automatically detects transformer layers across different architectures:
 
 - **LLaMA/Qwen/Mistral**: `model.layers`
-- **GPT-2/DistilGPT2**: `transformer.h`  
+- **GPT-2/DistilGPT2**: `transformer.h`
 - **T5**: `encoder.block` or `decoder.block`
 - **BERT**: `encoder.layer`
 - **Custom architectures**: Manual specification via `layers_path`
@@ -863,7 +863,7 @@ datasets = {
 for dataset_name, dataset in datasets.items():
     dataloader = prepare_dataloader(dataset)  # Your tokenization function
     scores = analyze_layer_importance(model, dataloader)
-    
+
     print(f"\n{dataset_name} - Top 3 most important layers:")
     sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     for layer_idx, score in sorted_scores[:3]:
@@ -923,7 +923,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 # Prepare dataset for layer analysis
 dataset = load_dataset('wikitext', 'wikitext-2-raw-v1', split='train[:200]')
 def tokenize_function(examples):
-    return tokenizer(examples['text'], truncation=True, padding='max_length', 
+    return tokenizer(examples['text'], truncation=True, padding='max_length',
                     max_length=512, return_tensors='pt')
 tokenized_dataset = dataset.map(tokenize_function, batched=True)
 dataloader = DataLoader(tokenized_dataset, batch_size=8)
@@ -1019,10 +1019,10 @@ layer_types = ["mlp_output", "attention_output", "gate_proj", "up_proj"]
 for layer_type in layer_types:
     print(f"\nAnalyzing {layer_type} layers:")
     visualize_mean_differences(
-        model, 
-        tokenizer, 
-        prompt_pair=prompt_pair, 
-        layer_type=layer_type, 
+        model,
+        tokenizer,
+        prompt_pair=prompt_pair,
+        layer_type=layer_type,
         layers="all",
         output_dir=f"./activation_analysis/{layer_type}",
         figure_format="png"
@@ -1070,8 +1070,8 @@ for i, prompt_pair in enumerate(selected_pairs):
         # - "down_proj_layer_{idx}" - Output of down projection in GLU
         layer_key = f"attention_output_layer_{layer_idx}"
         visualize_pca(
-            model, 
-            tokenizer, 
+            model,
+            tokenizer,
             prompt_pair=prompt_pair,
             layer_key=layer_key,  # This must match an existing layer name exactly
             highlight_diff=True,
@@ -1114,7 +1114,7 @@ According to the roadmap, OptiPFair has several planned extensions:
 
 ### Common Issues
 
-1. **Model Compatibility**: 
+1. **Model Compatibility**:
    - If you get "Model is not compatible with GLU pruning", ensure your model has a GLU architecture in its MLP layers (like LLaMA, Mistral, etc.)
    - Depth pruning works with any transformer model and doesn't require GLU architecture
 

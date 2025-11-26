@@ -1,23 +1,78 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+[project]
+name = "optipfair"
+version = "0.2.1"
+authors = [
+    {name = "Pere Martra", email = "peremartra@uadla.com"}
+]
+description="A library for structured pruning & Bias visualization of large language models"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "Apache-2.0" }
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+urls = { Homepage = "https://github.com/peremartra/optipfair" }
+dependencies = [
+    "torch>=2.9.1",
+    "transformers>=4.57.3",
+    "tqdm>=4.62.0",
+    "click>=8.0.0",
+]
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=4.5.0",
+    "pytest>=9.0.1",
+    "pytest-cov>=7.0.0",
+    "mypy>=1.18.2",
+]
+eval = [
+    "datasets>=4.4.1",
+    "numpy>=2.3.5",
+    "pandas>=2.3.3",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+]
+viz = [
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "numpy>=2.3.5",
+    "pandas>=2.3.3",
+    "scikit-learn>=1.0.0",
+]
 
-[tool.black]
-line-length = 100
-target-version = ["py38"]
-include = '\.pyi?$'
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.0",
+    "pytest>=9.0.1",
+    "pytest-cov>=7.0.0",
+    "mypy>=1.18.2",
+]
+eval = [
+    "datasets>=4.4.1",
+    "numpy>=2.3.5",
+    "pandas>=2.3.3",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+]
+viz = [
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "numpy>=2.3.5",
+    "pandas>=2.3.3",
+    "scikit-learn>=1.0.0",
+]
 
-[tool.isort]
-profile = "black"
-line_length = 100
 
-[tool.mypy]
-python_version = "3.8"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+[project.scripts]
+optipfair = "optipfair.cli.commands:cli"
 
-[[tool.mypy.overrides]]
-module = ["transformers.*", "tqdm.*"]
-ignore_missing_imports = true
+[tool.setuptools]
+packages = ["optipfair"]

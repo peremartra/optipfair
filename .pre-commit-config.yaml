@@ -1,0 +1,33 @@
+repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.14.6
+  hooks:
+    - id: ruff-check
+      args: ["--fix"]
+      exclude: '^(examples|tests|site)/.*'
+    - id: ruff-format
+      exclude: '^(examples|tests|site)/.*'
+
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v2.3.0
+  hooks:
+  - id: check-yaml
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: 'v1.18.2'
+  hooks:
+  - id: mypy
+    exclude: ^(examples|tests|site)/.*$
+
+# Uncomment following hook when tests are fixed
+# - repo: local
+#   hooks:
+#     - id: pytest-with-coverage
+#       name: Run Pytest with Coverage Check
+#       entry: pytest
+#       language: system
+#       types: [python]
+#       pass_filenames: false
+#       args: ["--cov=.", "--cov-report=term-missing", "--cov-fail-under=50"]

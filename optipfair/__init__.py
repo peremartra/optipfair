@@ -6,12 +6,13 @@ with a focus on maintaining model performance while reducing parameter count.
 """
 
 import logging
-from typing import Optional, Union, Dict, Any
+from typing import Any, Dict, Optional, Tuple, Union, overload
+
 from transformers import PreTrainedModel
+from typing_extensions import Literal
 
+from .pruning.depth import prune_model_depth
 from .pruning.mlp_glu import prune_model_mlp_glu
-from .pruning.depth import prune_model_depth, analyze_layer_importance
-
 from .pruning.utils import get_pruning_statistics
 
 __version__ = "0.2.1"
@@ -22,6 +23,45 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+
+@overload
+def prune_model(
+    model: PreTrainedModel,
+    pruning_type: str = "MLP_GLU",
+    neuron_selection_method: str = "MAW",
+    pruning_percentage: Optional[float] = 10,
+    expansion_rate: Optional[float] = None,
+    expansion_divisor: Optional[int] = None,
+    dataloader: Optional[Any] = None,
+    show_progress: bool = True,
+    return_stats: Literal[True] = ...,
+    # Depth pruning parameters
+    num_layers_to_remove: Optional[int] = None,
+    layer_indices: Optional[list] = None,
+    depth_pruning_percentage: Optional[float] = None,
+    layer_selection_method: str = "last",
+) -> Tuple[PreTrainedModel, Dict[str, Any]]: ...
+
+
+@overload
+def prune_model(
+    model: PreTrainedModel,
+    pruning_type: str = "MLP_GLU",
+    neuron_selection_method: str = "MAW",
+    pruning_percentage: Optional[float] = 10,
+    expansion_rate: Optional[float] = None,
+    expansion_divisor: Optional[int] = None,
+    dataloader: Optional[Any] = None,
+    show_progress: bool = True,
+    return_stats: Literal[False] = ...,
+    # Depth pruning parameters
+    num_layers_to_remove: Optional[int] = None,
+    layer_indices: Optional[list] = None,
+    depth_pruning_percentage: Optional[float] = None,
+    layer_selection_method: str = "last",
+) -> PreTrainedModel: ...
+
 
 def prune_model(
     model: PreTrainedModel,
@@ -38,10 +78,10 @@ def prune_model(
     layer_indices: Optional[list] = None,
     depth_pruning_percentage: Optional[float] = None,
     layer_selection_method: str = "last",
-) -> Union[PreTrainedModel, Dict[str, Any]]:
+) -> Union[PreTrainedModel, Tuple[PreTrainedModel, Dict[str, Any]]]:
     """
     Prune a pre-trained language model using the specified pruning method.
-    
+
     Args:
         model: Pre-trained model to prune
         pruning_type: Type of pruning to apply ("MLP_GLU" or "DEPTH")
@@ -62,16 +102,16 @@ def prune_model(
         layer_indices: Specific layer indices to remove - for DEPTH only
         depth_pruning_percentage: Percentage of layers to remove - for DEPTH only
         layer_selection_method: Method for selecting layers ("last", "first", "custom") - for DEPTH only
-        
+
     Returns:
         Pruned model or tuple of (pruned_model, statistics) if return_stats is True
     """
     # Keep a copy of the original model parameters for statistics
-    original_param_count = None
     if return_stats:
         from copy import deepcopy
+
         original_model = deepcopy(model)
-    
+
     # Apply the requested pruning method
     if pruning_type == "MLP_GLU":
         pruned_model = prune_model_mlp_glu(
@@ -94,11 +134,13 @@ def prune_model(
         )
     else:
         supported_types = ["MLP_GLU", "DEPTH"]
-        raise ValueError(f"Unsupported pruning type: {pruning_type}. Choose from {supported_types}.")
-    
+        raise ValueError(
+            f"Unsupported pruning type: {pruning_type}. Choose from {supported_types}."
+        )
+
     # Return statistics if requested
     if return_stats:
         stats = get_pruning_statistics(original_model, pruned_model)
         return pruned_model, stats
-    
+
     return pruned_model

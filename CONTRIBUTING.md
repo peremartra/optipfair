@@ -4,14 +4,17 @@ Thank you for your interest in contributing to OptiPFair! This document provides
 
 ## Table of Contents
 
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Process](#development-process)
-- [Pull Request Process](#pull-request-process)
-- [Coding Standards](#coding-standards)
-- [Testing](#testing)
-- [Documentation](#documentation)
-- [Future Roadmap](#future-roadmap)
+- [Contributing to OptiPFair](#contributing-to-optipfair)
+  - [Table of Contents](#table-of-contents)
+  - [Code of Conduct](#code-of-conduct)
+  - [Getting Started](#getting-started)
+  - [Development Process](#development-process)
+  - [Pull Request Process](#pull-request-process)
+  - [Coding Standards](#coding-standards)
+  - [Testing](#testing)
+  - [Documentation](#documentation)
+  - [Future Roadmap](#future-roadmap)
+  - [Questions?](#questions)
 
 ## Code of Conduct
 
@@ -28,10 +31,10 @@ By participating in this project, you agree to maintain a respectful and inclusi
 3. Install development dependencies:
    ```bash
    pip install -e ".[dev]"
-   
+
    # For working on bias visualization
    pip install -e ".[viz]"
-   
+
    # For working on evaluation tools
    pip install -e ".[eval]"
    ```
@@ -73,9 +76,7 @@ OptiPFair follows these coding standards:
 
 We use the following tools to enforce these standards:
 
-- `black`: Code formatting
-- `isort`: Import sorting
-- `flake8`: Linting
+- `ruff`: Code formatting
 - `mypy`: Type checking
 
 You can run all of these checks with:

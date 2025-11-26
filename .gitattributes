@@ -1,5 +1,5 @@
 *.html linguist-documentation
-*.css linguist-documentation  
+*.css linguist-documentation
 *.js linguist-documentation
 docs/* linguist-documentation
 images/* linguist-documentation

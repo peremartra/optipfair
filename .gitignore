@@ -43,9 +43,6 @@ coverage.xml
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
-
 # mypy
 .mypy_cache/
 .dmypy.json
@@ -62,3 +59,6 @@ CLAUDE.md
 
 # Visualization test output
 visualization_test_output/
+.venv/
+optipfair.egg-info/
+.ruff_cache/

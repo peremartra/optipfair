@@ -300,13 +300,13 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Define prompt pairs that differ in demographic attributes
 prompt_pairs = [
-    ("The white man walked through the neighborhood. The police officer thought he", 
+    ("The white man walked through the neighborhood. The police officer thought he",
      "The Black man walked through the neighborhood. The police officer thought he")
 ]
 
 # Generate visualizations and get bias metrics
 _, metrics = visualize_bias(
-    model, 
+    model,
     tokenizer,
     prompt_pairs=prompt_pairs,
     visualization_types=["mean_diff", "pca"],
@@ -349,7 +349,7 @@ optipfair offers two powerful structured pruning strategies:
     * **Number**: `num_layers_to_remove=4`
     * **Percentage**: `depth_pruning_percentage=25`
     * **Specific Indices**: `layer_indices=[12, 13, 14, 15]`
-  
+
 ### Understanding Model Internals: Layer Importance Analysis
 Before deciding which layers to remove with Depth Pruning, you can assess their relative importance. optipfair provides a method based on the cosine similarity between a layer's input and output embeddings.
 
@@ -367,8 +367,8 @@ Our goal is to make optipfair the go-to toolkit for efficient and fair model opt
 
 * **Attention Pruning**: Implementing Attention Bypass and Adaptive Attention Bypass(AAB).
 * **Advanced Benchmarks**: Integrating more comprehensive performance and evaluation benchmarks.
-* **GPU Optimizations**: Creating a v2.0 with significant GPU-specific optimizations for faster execution. 
-* **Large-Scale Model Support**: Adding compatibility for DeepSpeed and FSDP to handle 70B+ models efficiently. 
+* **GPU Optimizations**: Creating a v2.0 with significant GPU-specific optimizations for faster execution.
+* **Large-Scale Model Support**: Adding compatibility for DeepSpeed and FSDP to handle 70B+ models efficiently.
 
 ### 🤝 Contributing
 Contributions are welcome! Whether it's bug reports, feature requests, or code contributions, please check out our [contributing guidelines](CONTRIBUTING.md) to get started.
