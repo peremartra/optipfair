@@ -629,15 +629,15 @@ def prune_model_mlp_glu(
             # Step 3: Extract accumulated norms
             activation_norms = get_activation_norms()
             
-            # Verify we collected norms for all layers
-            num_layers = len(get_model_layers(model))
-            if len(activation_norms) != num_layers:
+            # Verify we collected norms for selected layers
+            expected_layers = len(layer_indices) if layer_indices is not None else len(get_model_layers(model))
+            if len(activation_norms) != expected_layers:
                 raise RuntimeError(
-                    f"Calibration failed: expected norms for {num_layers} layers, "
+                    f"Calibration failed: expected norms for {expected_layers} layers, "
                     f"got {len(activation_norms)}"
                 )
             
-            logger.info(f"Calibration complete: collected activation norms for {num_layers} layers")
+            logger.info(f"Calibration complete: collected activation norms for {expected_layers} layers")
             
         finally:
             # Step 4: Always clean up hooks (even if error occurs)

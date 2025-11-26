@@ -106,6 +106,7 @@ def test_selective_pruning_with_expansion_rate(model):
     pruned_model = prune_model(
         model=model,
         pruning_type="MLP_GLU",
+        pruning_percentage=None,  # Must be None when using expansion_rate
         expansion_rate=260,  # Target 260% expansion rate
         layer_indices=layer_indices,
         show_progress=False
