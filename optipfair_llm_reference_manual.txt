@@ -1377,7 +1377,7 @@ According to the roadmap, OptiPFair has several planned extensions:
    - When using `layers=[idx1, idx2, ...]`, these indices refer to positions in lists of layer names of each component type, not to specific named layers
    - Use `layer_key="exact_layer_name"` when targeting a specific layer with direct visualization functions
 
-2. **Memory Issues**: Use model loading options to manage memory:
+3. **Memory Issues**: Use model loading options to manage memory:
    ```python
    model = AutoModelForCausalLM.from_pretrained(
        model_name,
@@ -1386,12 +1386,12 @@ According to the roadmap, OptiPFair has several planned extensions:
    )
    ```
 
-3. **Visualization Errors**: If you encounter issues with bias visualization:
+4. **Visualization Errors**: If you encounter issues with bias visualization:
    - Ensure you've installed the visualization dependencies with `pip install "optipfair[viz]"`
    - Check that your prompts are well-formed and differ only in the demographic attribute
    - Try using the built-in default prompt pairs with `prompt_pairs=None`
 
-4. **Layer Not Found**: If you get "Layer X not found in activations" during bias visualization:
+5. **Layer Not Found**: If you get "Layer X not found in activations" during bias visualization:
    - Verify the layer name follows the format expected by the model (e.g., "mlp_output_layer_8")
    - Use `get_layer_names()` to see available layers
    - Try using the "first_middle_last" option for the layers parameter
@@ -1402,3 +1402,192 @@ According to the roadmap, OptiPFair has several planned extensions:
 - [Documentation Website](https://peremartra.github.io/optipfair/)
 - [PyPI Package](https://pypi.org/project/optipfair/)
 - Related Research: "From Biased to Balanced: Visualizing and Fixing Bias in Transformer Models" by Pere Martra
+
+### Neuron-Level Bias Analysis
+
+For detailed analysis at the individual neuron level, you can work directly with raw activations to identify which specific neurons contribute most to bias:
+
+```python
+from optipfair.bias.activations import get_activation_pairs
+import torch
+import numpy as np
+import json
+
+# Get raw activations for both prompts
+activations1, activations2 = get_activation_pairs(
+    model, 
+    tokenizer, 
+    prompt1="The white doctor examined the patient. The nurse thought",
+    prompt2="The Black doctor examined the patient. The nurse thought"
+)
+
+# Calculate neuron-level differences for each layer
+neuron_differences = {}
+
+for layer_name in activations1.keys():
+    act1 = activations1[layer_name]  # Shape: [seq_len, hidden_dim]
+    act2 = activations2[layer_name]
+    
+    # Absolute difference per neuron (averaged across sequence)
+    diff = torch.abs(act1 - act2).mean(dim=0)  # Shape: [hidden_dim]
+    
+    neuron_differences[layer_name] = {
+        'differences': diff.cpu().numpy(),
+        'max_neuron_idx': diff.argmax().item(),
+        'max_difference': diff.max().item(),
+        'mean_difference': diff.mean().item()
+    }
+
+# Find most biased neurons across all layers
+all_diffs = []
+for layer_name, metrics in neuron_differences.items():
+    max_idx = metrics['max_neuron_idx']
+    max_val = metrics['max_difference']
+    all_diffs.append((layer_name, max_idx, max_val))
+
+# Sort by difference magnitude
+all_diffs.sort(key=lambda x: x[2], reverse=True)
+
+print("Top 10 most biased neurons:")
+for layer, neuron, diff in all_diffs[:10]:
+    print(f"{layer} - Neuron {neuron}: {diff:.6f}")
+```
+
+#### Analyzing Specific Layers
+
+To get detailed information about which neurons are most biased in a particular layer:
+
+```python
+# Analyze a specific layer
+layer_name = "mlp_output_layer_15"
+differences = neuron_differences[layer_name]['differences']
+
+# Get top 20 most biased neurons in this layer
+top_neurons = differences.argsort()[-20:][::-1]
+
+print(f"Top 20 neurons with highest bias in {layer_name}:")
+for i, neuron_idx in enumerate(top_neurons, 1):
+    print(f"  {i}. Neuron {neuron_idx}: {differences[neuron_idx]:.6f}")
+```
+
+#### Exporting Neuron-Level Data
+
+Export complete neuron-level differences for further analysis:
+
+```python
+# Convert to serializable format
+export_data = {}
+for layer_name, metrics in neuron_differences.items():
+    export_data[layer_name] = {
+        'max_neuron': int(metrics['max_neuron_idx']),
+        'max_difference': float(metrics['max_difference']),
+        'mean_difference': float(metrics['mean_difference']),
+        'all_differences': metrics['differences'].tolist()
+    }
+
+# Save to JSON
+with open('neuron_level_bias.json', 'w') as f:
+    json.dump(export_data, f, indent=2)
+
+print("Neuron-level bias data exported to neuron_level_bias.json")
+```
+
+#### Visualizing Neuron Distribution
+
+Create histograms to understand the distribution of bias across neurons:
+
+```python
+import matplotlib.pyplot as plt
+
+# Visualize distribution of differences in a specific layer
+layer_name = "mlp_output_layer_15"
+differences = neuron_differences[layer_name]['differences']
+
+plt.figure(figsize=(12, 6))
+plt.hist(differences, bins=50, edgecolor='black', alpha=0.7)
+plt.xlabel('Activation Difference', fontsize=12)
+plt.ylabel('Number of Neurons', fontsize=12)
+plt.title(f'Distribution of Neuron-Level Bias - {layer_name}', fontsize=14)
+plt.axvline(differences.mean(), color='r', linestyle='--', linewidth=2, label='Mean')
+plt.axvline(differences.max(), color='g', linestyle='--', linewidth=2, label='Maximum')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.savefig(f'neuron_distribution_{layer_name}.png', dpi=300, bbox_inches='tight')
+plt.close()
+```
+
+#### Complete Example: Identifying Most Biased Neurons
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from optipfair.bias.activations import get_activation_pairs
+import torch
+import json
+
+# Load model
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+
+# Define prompts that differ only in demographic attribute
+prompt1 = "The white student submitted their assignment. The professor thought it was"
+prompt2 = "The Asian student submitted their assignment. The professor thought it was"
+
+# Get activations
+activations1, activations2 = get_activation_pairs(model, tokenizer, prompt1, prompt2)
+
+# Analyze all layers
+neuron_analysis = {}
+for layer_name in activations1.keys():
+    act1 = activations1[layer_name]
+    act2 = activations2[layer_name]
+    
+    # Calculate per-neuron differences
+    diff = torch.abs(act1 - act2).mean(dim=0)
+    
+    neuron_analysis[layer_name] = {
+        'differences': diff.cpu().numpy(),
+        'max_neuron': diff.argmax().item(),
+        'max_diff': diff.max().item(),
+        'mean_diff': diff.mean().item(),
+        'std_diff': diff.std().item()
+    }
+
+# Find global most biased neurons
+global_rankings = []
+for layer_name, analysis in neuron_analysis.items():
+    for neuron_idx, diff_value in enumerate(analysis['differences']):
+        global_rankings.append({
+            'layer': layer_name,
+            'neuron': neuron_idx,
+            'difference': float(diff_value)
+        })
+
+# Sort and get top 50 most biased neurons
+global_rankings.sort(key=lambda x: x['difference'], reverse=True)
+top_neurons = global_rankings[:50]
+
+print("Top 50 most biased neurons across entire model:")
+for i, neuron_info in enumerate(top_neurons, 1):
+    print(f"{i}. {neuron_info['layer']} - Neuron {neuron_info['neuron']}: {neuron_info['difference']:.6f}")
+
+# Save complete analysis
+output = {
+    'prompt_pair': {'prompt1': prompt1, 'prompt2': prompt2},
+    'layer_analysis': {
+        layer: {
+            'max_neuron': int(analysis['max_neuron']),
+            'max_difference': float(analysis['max_diff']),
+            'mean_difference': float(analysis['mean_diff']),
+            'std_difference': float(analysis['std_diff']),
+            'all_differences': analysis['differences'].tolist()
+        }
+        for layer, analysis in neuron_analysis.items()
+    },
+    'top_50_neurons': top_neurons
+}
+
+with open('complete_neuron_analysis.json', 'w') as f:
+    json.dump(output, f, indent=2)
+```
+
+This neuron-level analysis provides complete access to activation differences at the individual neuron level, allowing precise identification of which neurons contribute most to bias in each layer and across the entire model.
