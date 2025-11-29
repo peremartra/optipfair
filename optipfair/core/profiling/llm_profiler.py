@@ -205,27 +205,21 @@ class LLMProfiler:
         optimizer_memory_mb = 0
 
         if optimizer_type.lower() == "adamw":
-
             optimizer_memory_mb = (total_params * 8) / (1024**2)
         elif optimizer_type.lower() == "sgd":
-
             optimizer_memory_mb = (total_params * bytes_per_param) / (1024**2)
         elif optimizer_type.lower() == "adafactor":
-
             optimizer_memory_mb = (total_params * 4) / (1024**2)
         else:
-
             optimizer_memory_mb = (total_params * 8) / (1024**2)
 
         if gradient_accumulation_steps > 1:
-
             gradient_memory_mb *= gradient_accumulation_steps
 
         if (
             precision_type == PrecisionType.FP16
             or precision_type == PrecisionType.BFLOAT16
         ):
-
             master_weights_mb = (total_params * 4) / (1024**2)
             optimizer_memory_mb += master_weights_mb
 
@@ -248,7 +242,6 @@ class LLMProfiler:
         total_kv_memory = 0
 
         for layer in attention_info.attention_layers:
-
             num_heads = layer.get("num_attention_heads") or layer.get("num_heads") or 12
 
             head_dim = layer.get("head_dim")
@@ -576,7 +569,6 @@ class LLMProfiler:
         leaf_candidates = []
 
         for name in candidate_names:
-
             is_parent = any(
                 (other != name) and other.startswith(name + ".")
                 for other in candidate_names
@@ -704,13 +696,11 @@ class LLMProfiler:
         connections = self._analyze_connections_fx(sample_input)
 
         if connections is None:
-
             if self.verbose:
                 logger.warning("torch.fx failed, falling back to hooks method...")
             connections = self._analyze_connections_hooks(sample_input)
 
         if connections is None:
-
             if self.verbose:
                 logger.warning(
                     "All connection analysis methods failed, using basic analysis..."
@@ -892,7 +882,6 @@ class LLMProfiler:
     ):
         """Get input/output shapes for layers using torch.fx."""
         try:
-
             shape_info = {}
 
             def create_shape_hook(layer_name):

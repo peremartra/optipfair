@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 
-class InferenceTimeInfo(BaseModel):
+class InferencePerformanceInfo(BaseModel):
     mean_time_ms: float
     std_time_ms: float
     min_time_ms: float

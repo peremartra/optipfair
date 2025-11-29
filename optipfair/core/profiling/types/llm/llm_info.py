@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from core.analysis.profiling.models.llm import (
+from core.profiling.types.llm import (
     ArchitectureInfo,
     InferenceTimeInfo,
     MemoryUsageInfo,

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
-from core.analysis.profiling.models.llm import ConnectionAnalysisInfo
+from core.profiling.types.llm import ConnectionAnalysisInfo
 
 
 class ArchitectureInfo(BaseModel):

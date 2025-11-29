@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Dict
-from core.analysis.profiling.models.llm import LayerConnectionInfo
+from core.profiling.types.llm import LayerConnectionInfo
 
 
 class ConnectionAnalysisInfo(BaseModel):

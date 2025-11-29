@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from typing import Dict, Optional, Union
-from core.analysis.profiling.models.llm import PrecisionType
+from core.profiling.types.llm import PrecisionType
 
 
 class MemoryEstimate(BaseModel):

@@ -1,6 +1,6 @@
 import torch.cuda
 import platform
-from core.exceptions import PlatformNotSupportedException
+from core.exceptions.platform_not_supported import PlatformNotSupportedException
 import psutil
 from core.profiling.types.hardware import (
     CPUInfo,
@@ -15,7 +15,6 @@ from datetime import datetime
 
 
 class HardwareProfiler:
-
     def retrive_hardware_information(self) -> HardwareProfile:
         cpu_info = self.retrieve_cpu_information()
         gpu_info = self.retrieve_gpu_information()
@@ -134,11 +133,11 @@ class HardwareProfiler:
                 cached=cached,
                 reserved=reserved,
                 free=free,
-                total_gb=self.bytes_to_gb(total),
-                allocated_gb=self.bytes_to_gb(allocated),
-                cached_gb=self.bytes_to_gb(cached),
-                reserved_gb=self.bytes_to_gb(reserved),
-                free_gb=self.bytes_to_gb(free),
+                total_gb=self._bytes_to_gb(total),
+                allocated_gb=self._bytes_to_gb(allocated),
+                cached_gb=self._bytes_to_gb(cached),
+                reserved_gb=self._bytes_to_gb(reserved),
+                free_gb=self._bytes_to_gb(free),
             )
 
     def _get_gpu_properties(self, device_id: int) -> GPUProperties:

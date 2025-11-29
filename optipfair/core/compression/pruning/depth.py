@@ -1,13 +1,16 @@
 from loguru import logger
-from typing import Any, List, Optional, Literal
+from typing import Any, List, Optional, Literal, Dict
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import PreTrainedModel
 from optipfair.core.compression.pruning.base import BasePruner
 import numpy as np
-from optipfair.core.compression.pruning.pruning_tools import get_model_layers
+from optipfair.core.compression.pruning.pruning_tools.get_model_layers import (
+    get_model_layers,
+)
 from pydantic import BaseModel, ConfigDict, field_validator
 from core.compression.pruning.factory import register_pruner
 
@@ -21,22 +24,22 @@ class DepthPrunerKwargs(BaseModel):
     before the pruning process begins. It uses Pydantic v2 validators
     for robust and declarative validation.
     """
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     model: PreTrainedModel
     num_layers_to_remove: Optional[int] = None
     layer_indices: Optional[List[int]] = None
     depth_pruning_percentage: Optional[float] = None
-    layer_selection_method: Literal['last', 'custom'] = "last"
+    layer_selection_method: Literal["last", "custom"] = "last"
     show_progress: bool = True
 
-    @field_validator('model')
+    @field_validator("model")
     @classmethod
     def validate_model(cls, v):
         if not isinstance(v, PreTrainedModel):
             raise ValueError(
-                f"model must be an instance of PreTrainedModel, "
-                f"got {type(v).__name__}"
+                f"model must be an instance of PreTrainedModel, got {type(v).__name__}"
             )
         return v
 
@@ -59,7 +62,13 @@ class DepthPruner(BasePruner):
     efficiency gains with proper fine-tuning.
     """
 
-    def _analyze_layer_importance(self, model, dataloader, layers_path=None, show_progress=True):
+    def _analyze_layer_importance(
+        self,
+        model: PreTrainedModel,
+        dataloader: DataLoader,
+        layers_path=None,
+        show_progress: bool = True,
+    ):
         """
         Analyze transformer layer importance using cosine similarity between input/output representations.
 
@@ -97,12 +106,16 @@ class DepthPruner(BasePruner):
         hooks, layer_inputs, layer_outputs, num_layers = self._setup_layer_hooks(
             model, layers_path
         )
-        layer_importance_scores = {i: [] for i in range(num_layers)}
+        layer_importance_scores: Dict[int, List[Any]] = {
+            i: [] for i in range(num_layers)
+        }
 
         try:
             # Step 3: Process all batches with progress tracking
             iterator = (
-                tqdm(dataloader, desc="Processing batches") if show_progress else dataloader
+                tqdm(dataloader, desc="Processing batches")
+                if show_progress
+                else dataloader
             )
 
             with torch.no_grad():
@@ -115,7 +128,10 @@ class DepthPruner(BasePruner):
 
                     # Calculate importance for each layer
                     for layer_idx in range(num_layers):
-                        if layer_idx not in layer_inputs or layer_idx not in layer_outputs:
+                        if (
+                            layer_idx not in layer_inputs
+                            or layer_idx not in layer_outputs
+                        ):
                             layer_importance_scores[layer_idx].append(0.0)
                             continue
 
@@ -145,7 +161,6 @@ class DepthPruner(BasePruner):
 
         # Step 6: Return sorted by layer index
         return dict(sorted(final_scores.items()))
-
 
     def _setup_layer_hooks(self, model, layers_path):
         """
@@ -204,9 +219,6 @@ class DepthPruner(BasePruner):
         final_scores = {}
         for layer_idx, scores in layer_scores.items():
             if scores:
-                
-                
-
                 valid_scores = [s for s in scores if not (np.isnan(s) or np.isinf(s))]
                 final_scores[layer_idx] = np.mean(valid_scores) if valid_scores else 0.0
             else:
@@ -288,7 +300,9 @@ class DepthPruner(BasePruner):
             try:
                 for attr_name in dir(obj):
                     # Skip private/special attributes and methods
-                    if attr_name.startswith("_") or callable(getattr(obj, attr_name, None)):
+                    if attr_name.startswith("_") or callable(
+                        getattr(obj, attr_name, None)
+                    ):
                         continue
 
                     try:
@@ -404,7 +418,6 @@ class DepthPruner(BasePruner):
             # Catch any unexpected errors and return False
             return False
 
-
     def _infer_layers_path(self, model):
         """
         Automatically infer the path to transformer layers for different model architectures.
@@ -468,7 +481,6 @@ class DepthPruner(BasePruner):
         # If no pattern worked, try to find layers by inspection
         return self._find_layers_by_inspection(model)
 
-
     def _remove_layers_from_model(
         self,
         model: PreTrainedModel,
@@ -522,7 +534,9 @@ class DepthPruner(BasePruner):
             # Direct layers attribute
             model.layers = nn.ModuleList(new_layers)
         else:
-            raise ValueError("Could not determine model architecture for layer replacement")
+            raise ValueError(
+                "Could not determine model architecture for layer replacement"
+            )
 
         # Update model configuration
         if hasattr(model, "config") and hasattr(model.config, "num_hidden_layers"):
@@ -572,8 +586,9 @@ class DepthPruner(BasePruner):
             return sorted(custom_indices)
 
         else:
-            raise ValueError(f"Unknown layer_selection_method: {layer_selection_method}")
-
+            raise ValueError(
+                f"Unknown layer_selection_method: {layer_selection_method}"
+            )
 
     def _validate_layer_removal_params(
         self,
@@ -681,11 +696,10 @@ class DepthPruner(BasePruner):
             num_layers_to_remove=num_layers_to_remove,
             layer_indices=layer_indices,
             layer_selection_method=layer_selection_method,
-            layers=layers
+            layers=layers,
         )
-    
 
-    def prune(self, *args, **kwargs):
+    def prune(self, *args, **kwargs) -> PreTrainedModel:
         """
         Prune complete transformer layers from a model.
 
@@ -711,7 +725,7 @@ class DepthPruner(BasePruner):
 
         # Validate all parameters
         config = self._validate_layer_removal_params(
-            model=model,
+            model=parsed_kwargs.model,
             num_layers_to_remove=parsed_kwargs.num_layers_to_remove,
             layer_indices=parsed_kwargs.layer_indices,
             depth_pruning_percentage=parsed_kwargs.depth_pruning_percentage,
@@ -719,7 +733,6 @@ class DepthPruner(BasePruner):
         )
 
         # Extract validated parameters
-
 
         logger.info(
             f"Starting depth pruning: removing {config.num_layers_to_remove} layers from {config.total_layers} total layers"
@@ -741,7 +754,7 @@ class DepthPruner(BasePruner):
 
         # Perform the actual layer removal
         model = self._remove_layers_from_model(
-            model=model,
+            model=parsed_kwargs.model,
             layer_indices_to_remove=layers_to_remove,
             show_progress=parsed_kwargs.show_progress,
         )
