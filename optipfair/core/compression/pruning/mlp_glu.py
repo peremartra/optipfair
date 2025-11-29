@@ -1,23 +1,218 @@
-"""
-MLPGLUPruning - Module for pruning MLP layers with GLU architecture in transformer models.
-
-This module provides functionality to prune neurons in MLP layers that follow the
-Gated Linear Unit (GLU) architecture, as used in models like LLaMA. The pruning
-is structured to maintain the paired nature of gate_proj and up_proj layers.
-"""
-
 import gc
-import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
-
+from typing import Any, Callable, Dict, List, Optional, Tuple, Literal
+from loguru import logger
 import torch
 from torch import Tensor, nn
 from tqdm import tqdm
 from transformers import PreTrainedModel
+from core.compression.pruning.pruning_tools import get_model_layers, validate_model_for_glu_pruning
+from core.compression.pruning.base import BasePruner
+from core.compression.pruning.factory import register_pruner
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from torch.utils.data import DataLoader
 
-from .utils import get_model_layers, validate_model_for_glu_pruning
+class MlpGluPrunerKwargs(BaseModel):
+    """
+    Pydantic model for validating input arguments for the MLP GLU Pruner.
 
-logger = logging.getLogger(__name__)
+    This model consolidates all input validation logic, ensuring that
+    parameters for GLU pruning are correctly specified and compatible
+    before the pruning process begins. It uses Pydantic v2 validators
+    for robust and declarative validation.
+    """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    model: PreTrainedModel
+    neuron_selection_method: Literal["MAW", "VOW", "PON"] = "MAW"
+    pruning_percentage: Optional[float] = None
+    expansion_rate: Optional[float] = None
+    expansion_divisor: Optional[Literal[32, 64, 128, 256]] = None
+    dataloader: Optional[DataLoader] = None
+    show_progress: bool = True
+
+    @field_validator('model', mode='after')
+    @classmethod
+    def validate_model_is_pretrained_and_glu_compatible(cls, v: PreTrainedModel) -> PreTrainedModel:
+        """
+        Validates that the provided 'model' is an instance of PreTrainedModel
+        and is compatible with GLU pruning. This check delegates to an external
+        helper function `validate_model_for_glu_pruning`.
+        """
+        validate_model_for_glu_pruning(v)
+        return v
+
+    @model_validator(mode='after')
+    def validate_pruning_params_and_dataloader_usage(self) -> 'MlpGluPrunerKwargs':
+        """
+        Performs comprehensive validation for pruning parameters ('pruning_percentage',
+        'expansion_rate') and 'dataloader' usage. This validator runs after all
+        individual field validators.
+
+        It ensures:
+        1. 'pruning_percentage' and 'expansion_rate' are mutually exclusive.
+        2. At least one of 'pruning_percentage' or 'expansion_rate' is provided.
+        3. If 'expansion_rate' is provided, it's converted to 'pruning_percentage'
+           using `calculate_pruning_percentage_from_expansion_rate`.
+        4. The final 'pruning_percentage' (whether direct or calculated) is between 0 and 100.
+        5. 'dataloader' is only used when 'neuron_selection_method' is 'MAW'.
+        6. 'expansion_divisor' is only provided if 'pruning_percentage' (or 'expansion_rate')
+           is also provided.
+        """
+        if self.pruning_percentage is not None and self.expansion_rate is not None:
+            raise ValueError("Cannot provide both 'pruning_percentage' and 'expansion_rate'. "
+                             "Please choose one.")
+
+        if self.pruning_percentage is None and self.expansion_rate is None:
+            raise ValueError("Either 'pruning_percentage' or 'expansion_rate' must be provided.")
+
+        if self.expansion_rate is not None:
+            self.pruning_percentage = calculate_pruning_percentage_from_expansion_rate(
+                self.expansion_rate, self.model
+            )
+            self.expansion_rate = None
+
+        if self.pruning_percentage is not None and not (0 <= self.pruning_percentage <= 100):
+            raise ValueError(f"pruning_percentage must be between 0 and 100, but got {self.pruning_percentage}.")
+
+        if self.dataloader is not None and self.neuron_selection_method != 'MAW':
+            raise ValueError("dataloader can only be used with 'MAW' neuron_selection_method.")
+
+        if self.expansion_divisor is not None and self.pruning_percentage is None:
+            raise ValueError("expansion_divisor requires either 'pruning_percentage' or 'expansion_rate' to be provided.")
+
+        return self
+    
+    
+@register_pruner("mlp_glu")
+class MlpGluPruner(BasePruner):
+    """
+    MlpGluPruner - class for pruning MLP layers with GLU architecture in transformer models.
+
+    This class provides functionality to prune neurons in MLP layers that follow the
+    Gated Linear Unit (GLU) architecture, as used in models like LLaMA. The pruning
+    is structured to maintain the paired nature of gate_proj and up_proj layers.
+    """
+
+    def __init__(self):
+        self._accumulated_act_norms: Dict[int, Tensor] = dict()
+
+    def prune(self, *args, **kwargs) -> PreTrainedModel:
+        """
+        Prune the MLP layers in a model with GLU architecture.
+
+        Args:
+            model: Pre-trained model to prune
+            neuron_selection_method: Method to use for calculating neuron importance ("MAW", "VOW", or "PON")
+            pruning_percentage: Percentage of neurons to prune (0-100)
+            expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage)
+            expansion_divisor: Optional divisor (32, 64, 128, 256, or None) to round intermediate layer size.
+                When specified, the intermediate size will be rounded to the nearest multiple after applying
+                pruning. Cannot be used alone - requires either pruning_percentage or expansion_rate.
+            dataloader: Optional DataLoader for data-driven pruning. When provided with
+                neuron_selection_method='MAW', enables hybrid importance calculation using
+                both weight magnitudes and activation statistics. Only compatible with 'MAW'.
+            show_progress: Whether to show progress during pruning
+
+        Returns:
+            model: Pruned model
+        """
+
+        parsed_kwargs = MlpGluPrunerKwargs.model_validate(**kwargs)
+
+        # =============================================================================
+        # DATA-DRIVEN CALIBRATION (if dataloader provided)
+        # ==============================================================================
+        activation_norms = None
+
+        if parsed_kwargs.dataloader is not None:
+            logger.info("Starting data-driven calibration with provided dataloader")
+
+            device = next(parsed_kwargs.model.parameters()).device
+
+            # Step 1: Register hooks to capture activations
+            handles = setup_mlp_hooks_for_importance(parsed_kwargs.model, device)
+
+            try:
+                # Step 2: Run forward passes to collect statistics
+                run_calibration_forward_passes(parsed_kwargs.model, parsed_kwargs.dataloader, device, parsed_kwargs.show_progress)
+
+                # Step 3: Extract accumulated norms
+                activation_norms = get_activation_norms()
+
+                # Verify we collected norms for all layers
+                num_layers = len(get_model_layers(parsed_kwargs.model))
+                if len(activation_norms) != num_layers:
+                    raise RuntimeError(
+                        f"Calibration failed: expected norms for {num_layers} layers, "
+                        f"got {len(activation_norms)}"
+                    )
+
+                logger.info(
+                    f"Calibration complete: collected activation norms for {num_layers} layers"
+                )
+
+            finally:
+                # Step 4: Always clean up hooks (even if error occurs)
+                for handle in handles:
+                    handle.remove()
+                logger.info("Removed activation capture hooks")
+
+        # ==============================================================================
+        # PRUNING
+        # ==============================================================================
+
+        # Get all layers to prune
+        layers = get_model_layers(parsed_kwargs.model)
+        if not layers:
+            raise ValueError("Could not find MLP layers in the model.")
+
+        new_intermediate_size = None
+
+        # Prune each layer
+        iterator = tqdm(layers, desc="Pruning layers") if parsed_kwargs.show_progress else layers
+
+        for idx, layer in enumerate(iterator):
+            mlp = layer.mlp
+
+            # Store original size
+
+            # Get activation norms for this layer (if available)
+            layer_activation_norms = None
+            if activation_norms is not None:
+                if idx not in activation_norms:
+                    raise KeyError(
+                        f"No activation norms found for layer {idx}. "
+                        f"Available layers: {list(activation_norms.keys())}"
+                    )
+                layer_activation_norms = activation_norms[idx]
+
+            # Prune the neuron pairs (HYBRID if activation_norms provided, STATIC otherwise)
+            new_gate_proj, new_up_proj, new_down_proj, new_intermediate_size = (
+                prune_neuron_pairs(
+                    mlp=mlp,
+                    prune_percentage=parsed_kwargs.pruning_percentage,
+                    importance_fn=parsed_kwargs.importance_fn,
+                    activation_norms=layer_activation_norms,
+                    layer_idx=idx,
+                    expansion_divisor=parsed_kwargs.expansion_divisor,
+                )
+            )
+
+            # Replace original layers with pruned layers
+            mlp.gate_proj = new_gate_proj
+            mlp.up_proj = new_up_proj
+            mlp.down_proj = new_down_proj
+
+        # Update model configuration
+        if hasattr(parsed_kwargs.model, "config") and hasattr(parsed_kwargs.model.config, "intermediate_size"):
+            parsed_kwargs.model.config.intermediate_size = new_intermediate_size
+            logger.info(
+                f"Updated model config: intermediate_size = {new_intermediate_size}"
+            )
+
+        return parsed_kwargs.model
+
+
 
 # ==============================================================================
 # DATA-DRIVEN PRUNING: Activation Capture via Hooks

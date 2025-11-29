@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional, Tuple, Union, overload
 from transformers import PreTrainedModel
 from typing_extensions import Literal
 
-from .pruning.depth import prune_model_depth
+from .core.compression.pruning.depth import prune_model_depth
 from .pruning.mlp_glu import prune_model_mlp_glu
 from .pruning.utils import get_pruning_statistics
 

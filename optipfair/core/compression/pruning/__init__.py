@@ -6,7 +6,7 @@ This package provides various pruning methods for transformer-based models.
 
 from .depth import analyze_layer_importance, prune_model_depth
 from .mlp_glu import prune_model_mlp_glu
-from .utils import (
+from .pruning_tools import (
     count_parameters,
     get_model_layers,
     get_pruning_statistics,

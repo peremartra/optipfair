@@ -5,13 +5,10 @@ This module provides helper functions for model compatibility checking,
 layer extraction, and other common tasks needed across different pruning methods.
 """
 
-import logging
+from loguru import logger
 from typing import Any, Dict, List
-
 import torch
 from transformers import PreTrainedModel
-
-logger = logging.getLogger(__name__)
 
 
 def validate_model_for_glu_pruning(model: PreTrainedModel) -> bool:
