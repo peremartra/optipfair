@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from core.profiling.types.llm import (
     ArchitectureInfo,
-    InferenceTimeInfo,
     MemoryUsageInfo,
     ParameterInfo,
     ModelSummary,
@@ -15,6 +14,5 @@ class LLMInfo(BaseModel):
     architecture: ArchitectureInfo
     memory_usage: MemoryUsageInfo | None = None
     memory_estimation: MemoryEstimationInfo
-    inference_time: InferenceTimeInfo | None = None
     summary: ModelSummary
     attention_layers: AttentionLayerAnalysisInfo

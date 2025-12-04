@@ -1,5 +1,5 @@
 import time
-from typing import Tuple, Any, Optional, Callable, Dict, List
+from typing import Tuple, Any, Optional, Callable, Dict
 from collections import defaultdict
 import numpy as np
 import torch
@@ -8,7 +8,6 @@ from loguru import logger
 from core.profiling.types.llm import (
     ArchitectureInfo,
     ModelSummary,
-    InferenceTimeInfo,
     LLMInfo,
     ParameterInfo,
     AttentionLayerAnalysisInfo,
@@ -17,7 +16,6 @@ from core.profiling.types.llm import (
     PrecisionType,
     ConnectionAnalysisInfo,
     LayerConnectionInfo,
-    MeasureInferenceTime,
     AnalyzeConnections,
     EstimateMemory,
 )
@@ -351,67 +349,6 @@ class LLMProfiler:
             if hasattr(module, attr):
                 layer_info[attr] = getattr(module, attr, None)
 
-    def measure_inference_time(
-        self,
-        input_sample: Optional[Callable[[], Any]] = None,
-        num_runs: int = 100,
-        warmup_runs: int = 10,
-        tokenizer_max_length: int = 512,
-    ) -> InferenceTimeInfo:
-        """Measure model inference time with proper warmup."""
-        self.model.eval()
-
-        for _ in range(warmup_runs):
-            input_prompt = input_sample()
-            tokenized_input = self.tokenizer(
-                input_prompt,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=tokenizer_max_length,
-            ).to(self.device)
-
-            with torch.no_grad():
-                _ = self.model(**tokenized_input)
-
-        execution_times: List[Dict[str, str | float | int]] = list()
-
-        for i in range(num_runs):
-            start_time = time.perf_counter()
-            input_prompt = input_sample()
-            tokenized_input = self.tokenizer(
-                input_prompt,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=tokenizer_max_length,
-            ).input_ids.to(self.device)
-
-            with torch.no_grad():
-                _ = self.model(tokenized_input)
-
-            end_time = time.perf_counter()
-            execution_times.append(
-                {
-                    "run_number": i,
-                    "prompt_used": input_prompt,
-                    "execution_time_s": (end_time - start_time) * 1000,
-                }
-            )
-
-        execution_times_array = np.array(
-            [run["execution_time_s"] for run in execution_times]
-        )
-
-        return InferenceTimeInfo(
-            max_time_ms=np.max(execution_times_array),
-            mean_time_ms=np.mean(execution_times_array),
-            median_time_ms=np.median(execution_times_array),
-            min_time_ms=np.min(execution_times_array),
-            runs=len(execution_times_array),
-            std_time_ms=np.std(execution_times_array),
-        )
-
     def _prepare_inference_input(
         self,
         input_shape: Optional[Tuple[int, ...]],
@@ -502,17 +439,6 @@ class LLMProfiler:
             return self.model(*sample)
         else:
             return self.model(sample)
-
-    def _compute_timing_statistics(self, times: np.ndarray) -> InferenceTimeInfo:
-        """Compute timing statistics from measured times."""
-        return InferenceTimeInfo(
-            mean_time_ms=round(float(np.mean(times) * 1000), 4),
-            std_time_ms=round(float(np.std(times) * 1000), 4),
-            min_time_ms=round(float(np.min(times) * 1000), 4),
-            max_time_ms=round(float(np.max(times) * 1000), 4),
-            median_time_ms=round(float(np.median(times) * 1000), 4),
-            runs=int(len(times)),
-        )
 
     def analyze_attention_layers(self) -> AttentionLayerAnalysisInfo:
         """Analyze attention layers in the model."""
@@ -613,7 +539,6 @@ class LLMProfiler:
 
     def profile_complete(
         self,
-        measure_inference: Optional[MeasureInferenceTime] = None,
         analyze_connections: Optional[AnalyzeConnections] = None,
         estimate_memory: Optional[EstimateMemory] = None,
     ) -> LLMInfo:
@@ -644,17 +569,6 @@ class LLMProfiler:
 
             architecture_info.connections = connection_info
 
-        inference_time_info = None
-        if measure_inference:
-            if self.verbose:
-                logger.info("⏱️  Measuring inference time...")
-            inference_time_info = self.measure_inference_time(
-                input_sample=measure_inference.input_sample,
-                num_runs=measure_inference.num_runs,
-                warmup_runs=measure_inference.warmup_runs,
-                tokenizer_max_length=measure_inference.tokenizer_max_length,
-            )
-
         memory_info = None
         if estimate_memory:
             memory_info = self.estimate_memory_requirements(
@@ -665,7 +579,6 @@ class LLMProfiler:
         llm_info = LLMInfo(
             architecture=architecture_info,
             attention_layers=attention_layer_info,
-            inference_time=inference_time_info,
             parameters=parameters_info,
             summary=model_summary,
             memory_estimation=memory_info,
