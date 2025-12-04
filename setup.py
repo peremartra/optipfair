@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="optipfair",
-    version="0.2.2",
+    version="0.2.3",
     author="Pere Martra",
     author_email="peremartra@uadla.com",
     description="A library for structured pruning & Bias visualization of large language models",

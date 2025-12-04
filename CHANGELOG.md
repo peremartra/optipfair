@@ -1,3 +1,32 @@
+## [0.2.3] - 2025-12-04
+
+### 🐛 Bug Fixes
+
+#### Fixed Hybrid Importance Calculation
+- **compute_neuron_pair_importance_maw_hybrid()**: Simplified and fixed fórmula for hybrid importance calculation
+- **Improved Accuracy**: Now correctly combines static weight magnitudes with dynamic activation statistics
+- **Better Performance**: Reduced unnecessary calculations while maintaining correctness
+- **Consistent Methodology**: Uses MAW (Maximum Absolute Weight) consistently across all MLP components
+- **No API Changes**: Fully backward compatible, internal optimization only
+
+### 🔧 Technical Details
+
+#### Fixed Functions
+- `compute_neuron_pair_importance_maw_hybrid()`: Corrected importance score calculation:
+  - Static Component: Uses MAW (max + |min|) for gate_proj and up_proj layers
+  - Normalization: Scales each component to [0,1] for balanced weighting
+  - Hybrid Fusion: Multiplies structural potential by activation norms
+  - Validation: All tests pass, no breaking changes
+
+### 🔒 Compatibility
+
+- Fully backward compatible with v0.2.2 and earlier
+- No changes to public API
+- No changes to function signatures
+- Internal optimization only
+
+---
+
 ## [0.2.2] - 2025-11-26
 
 ### 🎉 New Features

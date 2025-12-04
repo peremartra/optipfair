@@ -14,7 +14,7 @@ from .pruning.depth import prune_model_depth, analyze_layer_importance
 
 from .pruning.utils import get_pruning_statistics
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 # Configure logging
 logging.basicConfig(
