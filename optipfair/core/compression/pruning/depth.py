@@ -11,45 +11,9 @@ import numpy as np
 from optipfair.core.compression.pruning.pruning_tools.get_model_layers import (
     get_model_layers,
 )
-from pydantic import BaseModel, ConfigDict, field_validator
 from core.compression.pruning.factory import register_pruner
-
-
-class DepthPrunerKwargs(BaseModel):
-    """
-    Pydantic model for validating input arguments for the Depth Pruner.
-
-    This model consolidates all input validation logic, ensuring that
-    parameters for depth pruning are correctly specified and compatible
-    before the pruning process begins. It uses Pydantic v2 validators
-    for robust and declarative validation.
-    """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    model: PreTrainedModel
-    num_layers_to_remove: Optional[int] = None
-    layer_indices: Optional[List[int]] = None
-    depth_pruning_percentage: Optional[float] = None
-    layer_selection_method: Literal["last", "custom"] = "last"
-    show_progress: bool = True
-
-    @field_validator("model")
-    @classmethod
-    def validate_model(cls, v):
-        if not isinstance(v, PreTrainedModel):
-            raise ValueError(
-                f"model must be an instance of PreTrainedModel, got {type(v).__name__}"
-            )
-        return v
-
-
-class ValidateLayerRemovalParamsReturn(BaseModel):
-    total_layers: int
-    num_layers_to_remove: Optional[int]
-    layer_indices: Optional[List[str]]
-    layer_selection_method: str
-    layers: List[Any]
+from core.compression.pruning.types.depth.kwargs import DepthPrunerKwargs
+from core.compression.pruning.types.depth.validate_layer_removal_params_return import ValidateLayerRemovalParamsReturn
 
 
 @register_pruner("depth")

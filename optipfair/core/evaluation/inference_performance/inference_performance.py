@@ -1,18 +1,10 @@
-
 import time
-
 import torch
 from transformers import AutoTokenizer, PreTrainedModel
 from core.evaluation.types.inference_performance_info import InferencePerformanceInfo
-from core.evaluation.types.compare_benchmark import CompareBenchmark
-from typing import Optional
 
 
 class InferencePerformanceBenchmarker:
-
-    def __init__(self):
-        self.original_model_bechmark: Optional[InferencePerformanceInfo] = None
-        self.compressed_model_bechmark: Optional[InferencePerformanceInfo] = None
 
     def time_inference(
         self,
@@ -80,25 +72,3 @@ class InferencePerformanceBenchmarker:
             self.compressed_model_bechmark = inference_performance_info
 
         return inference_performance_info
- 
-
-    def compare_models_inference(self) -> Optional[CompareBenchmark]:
-
-        if not self.original_model_bechmark or not self.compressed_model_bechmark:
-            raise ValueError("You need to run the benchmark for the compressed and the uncompressed model before comparing them.")
-
-        if self.original_model_bechmark and self.compressed_model_bechmark:        
-
-            speedup = (
-                self.original_model_bechmark.avg_time / self.compressed_model_bechmark.avg_time if self.compressed_model_bechmark.avg_time > 0 else float("inf")
-            )
-            tps_improvement = (
-                (self.compressed_model_bechmark.tokens_per_second / self.original_model_bechmark.tokens_per_second - 1) * 100
-                if self.original_model_bechmark.tokens_per_second > 0
-                else float("inf")
-            )
-
-            return CompareBenchmark(
-                speedup=speedup,
-                tps_improvement_percent=tps_improvement
-            )

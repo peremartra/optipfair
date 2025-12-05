@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from core.analysis.profiling.models.hardware import CPUInfo, RAMInfo, SystemGPUInfo
+from core.profiling.types.hardware import CPUInfo, RAMInfo, SystemGPUInfo
 from datetime import datetime
 
 

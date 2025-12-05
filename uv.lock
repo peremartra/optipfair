@@ -902,6 +902,7 @@ version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "datasets" },
     { name = "loguru" },
     { name = "psutil" },
     { name = "pydantic" },
@@ -957,6 +958,7 @@ viz = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.0.0" },
+    { name = "datasets", specifier = ">=4.4.1" },
     { name = "datasets", marker = "extra == 'eval'", specifier = ">=4.4.1" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "matplotlib", marker = "extra == 'eval'", specifier = ">=3.5.0" },
