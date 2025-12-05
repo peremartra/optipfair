@@ -1,5 +1,5 @@
 from loguru import logger
-from typing import Any, List, Optional, Literal, Dict
+from typing import Any, List, Optional, Dict
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -13,7 +13,9 @@ from optipfair.core.compression.pruning.pruning_tools.get_model_layers import (
 )
 from core.compression.pruning.factory import register_pruner
 from core.compression.pruning.types.depth.kwargs import DepthPrunerKwargs
-from core.compression.pruning.types.depth.validate_layer_removal_params_return import ValidateLayerRemovalParamsReturn
+from core.compression.pruning.types.depth.validate_layer_removal_params_return import (
+    ValidateLayerRemovalParamsReturn,
+)
 
 
 @register_pruner("depth")

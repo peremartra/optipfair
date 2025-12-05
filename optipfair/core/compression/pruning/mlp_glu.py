@@ -18,7 +18,6 @@ from torch.utils.data import DataLoader
 from core.compression.pruning.types.mlp_glu.kwargs import MlpGluPrunerKwargs
 
 
-
 @register_pruner("mlp_glu")
 class MlpGluPruner(BasePruner):
     """
@@ -116,6 +115,7 @@ class MlpGluPruner(BasePruner):
         return handles
 
     def _run_calibration_forward_passes(
+        self,
         model: PreTrainedModel,
         dataloader: DataLoader,
         device: torch.device,

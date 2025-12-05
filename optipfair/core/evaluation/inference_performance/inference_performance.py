@@ -5,7 +5,6 @@ from core.evaluation.types.inference_performance_info import InferencePerformanc
 
 
 class InferencePerformanceBenchmarker:
-
     def time_inference(
         self,
         model: PreTrainedModel,
@@ -14,7 +13,7 @@ class InferencePerformanceBenchmarker:
         max_new_tokens: int = 100,
         num_runs: int = 5,
         warmup_runs: int = 2,
-        is_uncompressed_model: bool = False
+        is_uncompressed_model: bool = False,
     ) -> InferencePerformanceInfo:
         """
         Measure inference time for a model.

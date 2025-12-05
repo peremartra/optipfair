@@ -6,7 +6,6 @@ from transformers import PreTrainedModel
 class AttentionPrunerKwargs(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-
     model: PreTrainedModel
     head_importance_method: Literal["ATTENTION_WEIGHTS"] = "ATTENTION_WEIGHTS"
     prune_percentage: float = 10

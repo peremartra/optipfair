@@ -64,8 +64,8 @@ class LLMProfiler:
         total = 0
         trainable = 0
         non_trainable = 0
-        dtype_counts = defaultdict(int)
-        dtype_bytes = defaultdict(int)
+        dtype_counts: defaultdict = defaultdict(int)
+        dtype_bytes: defaultdict = defaultdict(int)
 
         for param in self.model.parameters():
             num_params = param.numel()
@@ -191,7 +191,7 @@ class LLMProfiler:
     def _estimate_training_memory(
         self,
         total_params: int,
-        bytes_per_param: int,
+        bytes_per_param: float,
         optimizer_type: str,
         gradient_accumulation_steps: int,
         precision_type: PrecisionType,
@@ -200,7 +200,7 @@ class LLMProfiler:
 
         gradient_memory_mb = (total_params * bytes_per_param) / (1024**2)
 
-        optimizer_memory_mb = 0
+        optimizer_memory_mb = 0.0
 
         if optimizer_type.lower() == "adamw":
             optimizer_memory_mb = (total_params * 8) / (1024**2)
@@ -301,7 +301,7 @@ class LLMProfiler:
 
     def analyze_architecture(self) -> ArchitectureInfo:
         """Analyze model architecture and extract layer information."""
-        layer_types = defaultdict(int)
+        layer_types: defaultdict = defaultdict(int)
         layer_details = []
         total_layers = 0
 

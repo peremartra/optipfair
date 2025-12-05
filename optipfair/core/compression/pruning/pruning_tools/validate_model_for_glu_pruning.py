@@ -3,6 +3,7 @@ import torch
 from transformers import PreTrainedModel
 from core.compression.pruning.pruning_tools.get_model_layers import get_model_layers
 
+
 def validate_model_for_glu_pruning(model: PreTrainedModel) -> bool:
     """
     Validate that a model is compatible with GLU pruning.

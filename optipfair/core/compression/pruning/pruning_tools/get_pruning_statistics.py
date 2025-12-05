@@ -3,6 +3,7 @@ from typing import Dict, Any
 from core.compression.pruning.pruning_tools.count_parameters import count_parameters
 from core.compression.pruning.pruning_tools.get_model_layers import get_model_layers
 
+
 def get_pruning_statistics(
     original_model: torch.nn.Module,
     pruned_model: torch.nn.Module,

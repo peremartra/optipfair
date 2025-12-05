@@ -21,6 +21,7 @@ def register_neuron_importance_function(name):
 
     return register_neuron_importance_function_fn
 
+
 def import_modules():
     for file in os.listdir(os.path.dirname(__file__)):
         if (
@@ -29,4 +30,6 @@ def import_modules():
             and not file == "factory.py"
         ):
             module_name = file[: file.find(".py")]
-            importlib.import_module(f"core.compression.pruning.pruning_tools.neuron_importance.{module_name}")
+            importlib.import_module(
+                f"core.compression.pruning.pruning_tools.neuron_importance.{module_name}"
+            )

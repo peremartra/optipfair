@@ -1,7 +1,7 @@
-"""
-CLI package for OptiPFair.
-"""
+# """
+# CLI package for OptiPFair.
+# """
 
-from .commands import cli
+# from .commands import cli
 
-__all__ = ["cli"]
+# __all__ = ["cli"]

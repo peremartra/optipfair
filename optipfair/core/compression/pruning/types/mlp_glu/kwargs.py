@@ -9,6 +9,7 @@ from core.compression.pruning.pruning_tools import (
 )
 from torch.utils.data import DataLoader
 
+
 class MlpGluPrunerKwargs(BaseModel):
     """
     Pydantic model for validating input arguments for the MLP GLU Pruner.

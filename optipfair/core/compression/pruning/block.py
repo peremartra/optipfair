@@ -3,7 +3,6 @@ from transformers import PreTrainedModel
 
 
 class BlockPruner(BasePruner):
-    
     def prune(self, *args, **kwargs) -> PreTrainedModel:
         """
         Placeholder for future implementation of transformer block pruning.

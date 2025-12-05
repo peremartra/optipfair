@@ -1,10 +1,12 @@
 import torch
-from core.compression.pruning.pruning_tools.neuron_importance.factory import register_neuron_importance_function
+from core.compression.pruning.pruning_tools.neuron_importance.factory import (
+    register_neuron_importance_function,
+)
 from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class ComputeNeuronPairImportanceMawHybridKwargs(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra='ignore')
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
     gate_weight: torch.Tensor
     up_weight: torch.Tensor
@@ -12,23 +14,23 @@ class ComputeNeuronPairImportanceMawHybridKwargs(BaseModel):
     X_d_norm: torch.Tensor
 
     @model_validator(mode="after")
-    def validate_compute_neuron_pair_importance_maw_hybrid_kwargs(self) -> "ComputeNeuronPairImportanceMawHybridKwargs":
+    def validate_compute_neuron_pair_importance_maw_hybrid_kwargs(
+        self,
+    ) -> "ComputeNeuronPairImportanceMawHybridKwargs":
         if not isinstance(self.gate_weight, torch.Tensor):
-            raise ValueError('gate_weight is not instance of torch.Tensor')
+            raise ValueError("gate_weight is not instance of torch.Tensor")
         if not isinstance(self.up_weight, torch.Tensor):
-            raise ValueError('up_weight is not instance of torch.Tensor')
+            raise ValueError("up_weight is not instance of torch.Tensor")
         if not isinstance(self.down_weight, torch.Tensor):
-            raise ValueError('down_weight is not instance of torch.Tensor')
+            raise ValueError("down_weight is not instance of torch.Tensor")
         if not isinstance(self.X_d_norm, torch.Tensor):
-            raise ValueError('X_d_norm is not instance of torch.Tensor')
+            raise ValueError("X_d_norm is not instance of torch.Tensor")
 
         return self
 
 
-@register_neuron_importance_function('maw_hybrid')
-def compute_neuron_pair_importance_maw_hybrid(
-    *args, **kwargs
-) -> torch.Tensor:
+@register_neuron_importance_function("maw_hybrid")
+def compute_neuron_pair_importance_maw_hybrid(*args, **kwargs) -> torch.Tensor:
     """
     Compute neuron pair importance using hybrid data-driven method (MAW + Activations).
 
@@ -62,7 +64,7 @@ def compute_neuron_pair_importance_maw_hybrid(
 
     # Convert all weights to float32
     gate_weight = parsed_kwargs.gate_weight.float()
-    up_weight =   parsed_kwargs.up_weight.float()
+    up_weight = parsed_kwargs.up_weight.float()
     down_weight = parsed_kwargs.down_weight.float()
 
     # ==========================================================================
