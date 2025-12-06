@@ -15,9 +15,6 @@ from core.profiling.types.llm.memory_estimate import (
     MemoryEstimationInfo,
 )
 from core.profiling.types.llm.llm_info import LLMInfo
-from optipfair.core.evaluation.inference_performance.types.measure_inference_time import (
-    MeasureInferenceTime,
-)
 from core.profiling.types.llm.analyze_connections import AnalyzeConnections
 from core.profiling.types.llm.estimate_memory import EstimateMemory
 
@@ -34,7 +31,6 @@ __all__ = [
     "PrecisionType",
     "ConnectionAnalysisInfo",
     "LayerConnectionInfo",
-    "MeasureInferenceTime",
     "AnalyzeConnections",
     "EstimateMemory",
 ]

@@ -1,8 +1,15 @@
 from core.compression.pruning.base import BasePruner
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 
 class AttentionPruner(BasePruner):
-    def prune(self, *args, **kwargs):
+    def prune(
+        self,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
+        *args,
+        **kwargs,
+    ) -> PreTrainedModel:
         """
         Placeholder for future implementation of attention head pruning.
 

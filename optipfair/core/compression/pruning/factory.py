@@ -6,7 +6,7 @@ from typing import Dict
 __PRUNER__: Dict[str, BasePruner] = dict()
 
 
-def factory(name, *args, **kwargs):
+def factory(name, *args, **kwargs) -> BasePruner:
     return __PRUNER__[name](*args, **kwargs)
 
 

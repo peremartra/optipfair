@@ -1,18 +1,9 @@
-# """
-# Command-line interface for OptiPFair.
-
-# This module provides the CLI commands for pruning models and related operations.
-# """
-
 # import logging
 # import os
 
 # import click
 # import torch
 # from transformers import AutoModelForCausalLM, AutoTokenizer
-
-# from .. import prune_model
-# from ..pruning.utils import count_parameters
 
 # logger = logging.getLogger(__name__)
 

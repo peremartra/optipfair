@@ -5,8 +5,8 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import PreTrainedModel
-from optipfair.core.compression.pruning.base import BasePruner
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
+from core.compression.pruning.base import BasePruner
 import numpy as np
 from optipfair.core.compression.pruning.pruning_tools.get_model_layers import (
     get_model_layers,
@@ -665,7 +665,13 @@ class DepthPruner(BasePruner):
             layers=layers,
         )
 
-    def prune(self, *args, **kwargs) -> PreTrainedModel:
+    def prune(
+        self,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
+        *args,
+        **kwargs,
+    ) -> PreTrainedModel:
         """
         Prune complete transformer layers from a model.
 
@@ -687,11 +693,11 @@ class DepthPruner(BasePruner):
         Raises:
             ValueError: If parameters are invalid or model is incompatible
         """
-        parsed_kwargs = DepthPrunerKwargs.model_validate(**kwargs)
+        parsed_kwargs = DepthPrunerKwargs.model_validate(kwargs)
 
         # Validate all parameters
         config = self._validate_layer_removal_params(
-            model=parsed_kwargs.model,
+            model=model,
             num_layers_to_remove=parsed_kwargs.num_layers_to_remove,
             layer_indices=parsed_kwargs.layer_indices,
             depth_pruning_percentage=parsed_kwargs.depth_pruning_percentage,
@@ -720,7 +726,7 @@ class DepthPruner(BasePruner):
 
         # Perform the actual layer removal
         model = self._remove_layers_from_model(
-            model=parsed_kwargs.model,
+            model=model,
             layer_indices_to_remove=layers_to_remove,
             show_progress=parsed_kwargs.show_progress,
         )

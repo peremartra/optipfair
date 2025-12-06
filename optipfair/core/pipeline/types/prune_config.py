@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, model_validator
 from typing import Literal, Union
 from core.compression.pruning.types.depth.kwargs import DepthPrunerKwargs
 from core.compression.pruning.types.mlp_glu.kwargs import MlpGluPrunerKwargs
@@ -12,26 +12,24 @@ class PruneConfig(BaseModel):
         DepthPrunerKwargs, MlpGluPrunerKwargs, BlockPrunerKwargs, AttentionPrunerKwargs
     ]
 
-    @field_validator("prune_technique_kwargs")
-    @classmethod
-    def validate_prune_technique_kwargs(cls, v):
-        if cls.prune_technique == "block" and not isinstance(v, BlockPrunerKwargs):
+    @model_validator(mode='after')
+    def validate_prune_technique_kwargs(self):
+        if self.prune_technique == "block" and not isinstance(self.prune_technique_kwargs, BlockPrunerKwargs):
             raise ValueError(
-                f"trying to prune using {cls.prune_technique} prune with wrong kwargs class"
+                f"trying to prune using {self.prune_technique} prune with wrong kwargs class"
             )
-        if cls.prune_technique == "depth" and not isinstance(v, DepthPrunerKwargs):
+        if self.prune_technique == "depth" and not isinstance(self.prune_technique_kwargs, DepthPrunerKwargs):
             raise ValueError(
-                f"trying to prune using {cls.prune_technique} prune with wrong kwargs class"
+                f"trying to prune using {self.prune_technique} prune with wrong kwargs class"
             )
-        if cls.prune_technique == "mlp_glu" and not isinstance(v, MlpGluPrunerKwargs):
+        if self.prune_technique == "mlp_glu" and not isinstance(self.prune_technique_kwargs, MlpGluPrunerKwargs):
             raise ValueError(
-                f"trying to prune using {cls.prune_technique} prune with wrong kwargs class"
+                f"trying to prune using {self.prune_technique} prune with wrong kwargs class"
             )
-        if cls.prune_technique == "attention" and not isinstance(
-            v, AttentionPrunerKwargs
+        if self.prune_technique == "attention" and not isinstance(
+            self.prune_technique_kwargs, AttentionPrunerKwargs
         ):
             raise ValueError(
-                f"trying to prune using {cls.prune_technique} prune with wrong kwargs class"
+                f"trying to prune using {self.prune_technique} prune with wrong kwargs class"
             )
-
-        return v
+        return self

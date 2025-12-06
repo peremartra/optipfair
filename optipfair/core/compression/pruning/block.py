@@ -1,9 +1,15 @@
 from core.compression.pruning.base import BasePruner
-from transformers import PreTrainedModel
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 
 class BlockPruner(BasePruner):
-    def prune(self, *args, **kwargs) -> PreTrainedModel:
+    def prune(
+        self,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
+        *args,
+        **kwargs,
+    ) -> PreTrainedModel:
         """
         Placeholder for future implementation of transformer block pruning.
 

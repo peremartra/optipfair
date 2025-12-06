@@ -1,16 +1,40 @@
 import torch
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase, PreTrainedModel
-from typing import List
+from typing import Set, Literal, List, Dict, Callable, get_args
 from core.evaluation.model_performance.types.compute_perplexity_for_batch_return import (
     ComputePerplexityForBatchReturn,
 )
 from core.evaluation.model_performance.types.compute_perplexity_for_dataset_return import (
     ComputePerplexityForDatasetReturn,
 )
+from datasets import load_dataset
+from core.evaluation.model_performance.types.perplexity_test_result import (
+    PerplexityTestResult,
+)
+from loguru import logger
+
+
+# if the test have two words, it need to be separated by underscore. Because it will be mapped to methods inside the ModelPerformanceBenchmarker class
+PERPLEXITY_TESTS = Literal["lambada"]
+ACCURACY_TESTS = Literal["arc_c"]
+
+AVAILABLE_TESTS: List[str] = list(get_args(PERPLEXITY_TESTS) + get_args(ACCURACY_TESTS))
 
 
 class ModelPerformanceBenchmarker:
+    def __init__(self):
+        self._test_methods: Dict[
+            str,
+            Callable[
+                [PreTrainedTokenizerBase, PreTrainedModel, int],
+                ComputePerplexityForDatasetReturn,
+            ],
+        ] = {}
+        for test in AVAILABLE_TESTS:
+            if hasattr(self, test):
+                self._test_methods[test] = getattr(self, test)
+
     def _compute_perplexity_for_batch(
         self,
         input_texts: List[str],
@@ -72,6 +96,7 @@ class ModelPerformanceBenchmarker:
         tokenizer: PreTrainedTokenizerBase,
         model: PreTrainedModel,
         batch_size: int = 16,
+        num_examples: int = 2
     ) -> ComputePerplexityForDatasetReturn:
         """
         Computes perplexity for an entire Hugging Face Dataset by processing it in batches.
@@ -88,10 +113,10 @@ class ModelPerformanceBenchmarker:
             scores for each example and the overall mean perplexity across the entire dataset.
         """
         all_perplexities: List[float] = []
-        total_examples: int = len(dataset)
+        effective_size: int = min(len(dataset), num_examples) if num_examples is not None else len(dataset)
 
-        for i in range(0, total_examples, batch_size):
-            batch_end: int = min(i + batch_size, total_examples)
+        for i in range(0, effective_size, batch_size):
+            batch_end: int = min(i + batch_size, effective_size)
 
             batch_texts: List[str] = dataset[i:batch_end][text_column]
 
@@ -105,3 +130,43 @@ class ModelPerformanceBenchmarker:
         return ComputePerplexityForDatasetReturn(
             all_perplexities=all_perplexities, mean_perplexity=mean_perplexity
         )
+
+    def lambada(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        model: PreTrainedModel,
+        batch_size: int = 16,
+    ):
+        dataset = load_dataset("cimec/lambada")
+        result = self.evaluate_perplexity(
+            dataset=dataset['test'],
+            text_column="text",
+            batch_size=batch_size,
+            model=model,
+            tokenizer=tokenizer,
+        )
+        return PerplexityTestResult(result=result, test_name="lambada")
+
+    def benchmark(
+        self,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
+        tests: Set[Literal[PERPLEXITY_TESTS, ACCURACY_TESTS]],
+        batch_size: int = 16,
+    ) -> List[PerplexityTestResult]:
+        if not tests:
+            raise ValueError(
+                "Your should inform at least one test to benchmark the model"
+            )
+
+        test_results = list()
+        for test in tests:
+            method = self._test_methods.get(test)
+            if method is None:
+                logger.warning(f"test with name {test} is not implemented")
+                continue
+
+            result = method(tokenizer, model, batch_size)
+            test_results.append(result)
+
+        return test_results

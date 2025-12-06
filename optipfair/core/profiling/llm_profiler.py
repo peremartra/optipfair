@@ -36,12 +36,10 @@ class LLMProfiler:
         self,
         model: nn.Module,
         tokenizer,
-        model_name: str = "Unknown Model",
         verbose: bool = True,
     ):
         self.model = model
         self.tokenizer = tokenizer
-        self.model_name = model_name
         self.verbose = verbose
         self.device = self._detect_device()
         self.profile_data: Optional[LLMInfo] = None
@@ -531,7 +529,6 @@ class LLMProfiler:
     def get_model_summary(self) -> ModelSummary:
         """Get basic model summary information."""
         return ModelSummary(
-            model_name=self.model_name,
             device=str(self.device),
             model_class=type(self.model).__name__,
             pytorch_version=torch.__version__,
@@ -544,8 +541,6 @@ class LLMProfiler:
     ) -> LLMInfo:
         """
         Perform complete model profiling."""
-        if self.verbose:
-            logger.info(f"🔍 Profiling {self.model_name}...")
 
         model_summary = self.get_model_summary()
 

@@ -2,9 +2,35 @@ import time
 import torch
 from transformers import AutoTokenizer, PreTrainedModel
 from core.evaluation.types.inference_performance_info import InferencePerformanceInfo
+from core.evaluation.types.compare_benchmark import CompareBenchmark
 
 
 class InferencePerformanceBenchmarker:
+    def compare_models_inference(
+        self,
+        original_benchmark: InferencePerformanceInfo,
+        compressed_benchmark: InferencePerformanceInfo,
+    ) -> CompareBenchmark:
+        speedup = (
+            original_benchmark / compressed_benchmark.avg_time
+            if compressed_benchmark.avg_time > 0
+            else float("inf")
+        )
+        tps_improvement = (
+            (
+                compressed_benchmark.tokens_per_second
+                / original_benchmark.tokens_per_second
+                - 1
+            )
+            * 100
+            if original_benchmark.tokens_per_second > 0
+            else float("inf")
+        )
+
+        return CompareBenchmark(
+            speedup=speedup, tps_improvement_percent=tps_improvement
+        )
+
     def time_inference(
         self,
         model: PreTrainedModel,
@@ -13,7 +39,6 @@ class InferencePerformanceBenchmarker:
         max_new_tokens: int = 100,
         num_runs: int = 5,
         warmup_runs: int = 2,
-        is_uncompressed_model: bool = False,
     ) -> InferencePerformanceInfo:
         """
         Measure inference time for a model.
@@ -64,10 +89,5 @@ class InferencePerformanceBenchmarker:
             num_runs=num_runs,
             generated_tokens=generated_tokens,
         )
-
-        if is_uncompressed_model:
-            self.original_model_bechmark = inference_performance_info
-        if not is_uncompressed_model:
-            self.compressed_model_bechmark = inference_performance_info
 
         return inference_performance_info

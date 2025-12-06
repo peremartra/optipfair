@@ -1,12 +1,5 @@
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
-from core.compression.pruning.pruning_tools.calculate_pruning_percentage_from_expansion_rate import (
-    calculate_pruning_percentage_from_expansion_rate,
-)
-from transformers import PreTrainedModel
+from pydantic import BaseModel, ConfigDict, model_validator
 from typing import Literal, Optional
-from core.compression.pruning.pruning_tools import (
-    validate_model_for_glu_pruning,
-)
 from torch.utils.data import DataLoader
 
 
@@ -22,26 +15,12 @@ class MlpGluPrunerKwargs(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    model: PreTrainedModel
     neuron_selection_method: Literal["MAW", "VOW", "PON"] = "MAW"
     pruning_percentage: Optional[float] = None
     expansion_rate: Optional[float] = None
     expansion_divisor: Optional[Literal[32, 64, 128, 256]] = None
     dataloader: Optional[DataLoader] = None
     show_progress: bool = True
-
-    @field_validator("model", mode="after")
-    @classmethod
-    def validate_model_is_pretrained_and_glu_compatible(
-        cls, v: PreTrainedModel
-    ) -> PreTrainedModel:
-        """
-        Validates that the provided 'model' is an instance of PreTrainedModel
-        and is compatible with GLU pruning. This check delegates to an external
-        helper function `validate_model_for_glu_pruning`.
-        """
-        validate_model_for_glu_pruning(v)
-        return v
 
     @model_validator(mode="after")
     def validate_pruning_params_and_dataloader_usage(self) -> "MlpGluPrunerKwargs":
@@ -70,12 +49,6 @@ class MlpGluPrunerKwargs(BaseModel):
             raise ValueError(
                 "Either 'pruning_percentage' or 'expansion_rate' must be provided."
             )
-
-        if self.expansion_rate is not None:
-            self.pruning_percentage = calculate_pruning_percentage_from_expansion_rate(
-                self.expansion_rate, self.model
-            )
-            self.expansion_rate = None
 
         if self.pruning_percentage is not None and not (
             0 <= self.pruning_percentage <= 100

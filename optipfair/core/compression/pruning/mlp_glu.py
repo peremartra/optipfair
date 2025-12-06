@@ -16,6 +16,10 @@ from core.compression.pruning.base import BasePruner
 from core.compression.pruning.factory import register_pruner
 from torch.utils.data import DataLoader
 from core.compression.pruning.types.mlp_glu.kwargs import MlpGluPrunerKwargs
+from core.compression.pruning.pruning_tools.calculate_pruning_percentage_from_expansion_rate import (
+    calculate_pruning_percentage_from_expansion_rate,
+)
+from transformers import PreTrainedTokenizerBase
 
 
 @register_pruner("mlp_glu")
@@ -307,7 +311,13 @@ class MlpGluPruner(BasePruner):
 
         return new_gate_proj, new_up_proj, new_down_proj, k
 
-    def prune(self, *args, **kwargs) -> PreTrainedModel:
+    def prune(
+        self,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
+        *args,
+        **kwargs,
+    ) -> PreTrainedModel:
         """
         Prune the MLP layers in a model with GLU architecture.
 
@@ -327,9 +337,15 @@ class MlpGluPruner(BasePruner):
         Returns:
             model: Pruned model
         """
+        parsed_kwargs = MlpGluPrunerKwargs.model_validate(kwargs)
 
-        parsed_kwargs = MlpGluPrunerKwargs.model_validate(**kwargs)
-
+        if parsed_kwargs.expansion_rate is not None:
+            parsed_kwargs.pruning_percentage = (
+                calculate_pruning_percentage_from_expansion_rate(
+                    parsed_kwargs.expansion_rate, model
+                )
+            )
+            parsed_kwargs.expansion_rate = None
         # =============================================================================
         # DATA-DRIVEN CALIBRATION (if dataloader provided)
         # ==============================================================================
@@ -338,15 +354,15 @@ class MlpGluPruner(BasePruner):
         if parsed_kwargs.dataloader is not None:
             logger.info("Starting data-driven calibration with provided dataloader")
 
-            device = next(parsed_kwargs.model.parameters()).device
+            device = next(model.parameters()).device
 
             # Step 1: Register hooks to capture activations
-            handles = self._setup_mlp_hooks_for_importance(parsed_kwargs.model, device)
+            handles = self._setup_mlp_hooks_for_importance(model, device)
 
             try:
                 # Step 2: Run forward passes to collect statistics
                 self._run_calibration_forward_passes(
-                    parsed_kwargs.model,
+                    model,
                     parsed_kwargs.dataloader,
                     device,
                     parsed_kwargs.show_progress,
@@ -356,7 +372,7 @@ class MlpGluPruner(BasePruner):
                 activation_norms = self._get_activation_norms()
 
                 # Verify we collected norms for all layers
-                num_layers = len(get_model_layers(parsed_kwargs.model))
+                num_layers = len(get_model_layers(model))
                 if len(activation_norms) != num_layers:
                     raise RuntimeError(
                         f"Calibration failed: expected norms for {num_layers} layers, "
@@ -378,7 +394,7 @@ class MlpGluPruner(BasePruner):
         # ==============================================================================
 
         # Get all layers to prune
-        layers = get_model_layers(parsed_kwargs.model)
+        layers = get_model_layers(model)
         if not layers:
             raise ValueError("Could not find MLP layers in the model.")
 
@@ -423,13 +439,13 @@ class MlpGluPruner(BasePruner):
             mlp.up_proj = new_up_proj
             mlp.down_proj = new_down_proj
 
-        # Update model configuration
-        if hasattr(parsed_kwargs.model, "config") and hasattr(
-            parsed_kwargs.model.config, "intermediate_size"
+
+        if hasattr(model, "config") and hasattr(
+            model.config, "intermediate_size"
         ):
-            parsed_kwargs.model.config.intermediate_size = new_intermediate_size
+            model.config.intermediate_size = new_intermediate_size
             logger.info(
                 f"Updated model config: intermediate_size = {new_intermediate_size}"
             )
 
-        return parsed_kwargs.model
+        return model
