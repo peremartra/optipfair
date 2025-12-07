@@ -261,83 +261,71 @@ def compute_neuron_pair_importance_maw_hybrid(
     X_d_norm: torch.Tensor
 ) -> torch.Tensor:
     """
-    Compute neuron pair importance using hybrid data-driven method (MAW + Activations).
-    
-    Implements CFSP methodology (arXiv:2409.13199v2, Equation 8):
-    
-    F_i^l = Σ_j [ |W_d^ij · ||X_d^i|| / (||W_d^*j|| · ||X_d^*||) ] + 
-            Σ_j [ |W_u^ij| / ||W_u^i*|| ] + 
-            Σ_j [ |W_g^ij| / ||W_g^i*|| ]
-    
-    Where:
-    - Component 1 (down_proj): Weights weighted by activations (DATA-DRIVEN)
-    - Component 2 (up_proj): Static weight-based importance
-    - Component 3 (gate_proj): Static weight-based importance
-    
+    Compute neuron pair importance using a hybrid MAW + activations method.
+
+    This implementation combines:
+    - Structural importance from weights (MAW-style range: max + |min|)
+      for gate_proj, up_proj, and down_proj.
+    - Dynamic importance from activation norms X_d_norm collected during calibration.
+
+    The final score for neuron i is:
+        importance_i = (MAW_gate_i_norm + MAW_up_i_norm + MAW_down_i_norm) * X_d_norm_i
+
     Args:
         gate_weight: Weight matrix from gate_proj [intermediate_size, hidden_size]
         up_weight: Weight matrix from up_proj [intermediate_size, hidden_size]
         down_weight: Weight matrix from down_proj [hidden_size, intermediate_size]
         X_d_norm: Accumulated L2 norms from calibration [intermediate_size]
-        
+
     Returns:
         importance_scores: Importance score per neuron pair [intermediate_size]
     """
-    device = gate_weight.device
-    intermediate_size = gate_weight.size(0)
-    
-    # Move X_d_norm to device and ensure float32 for numerical stability
-    X_d_norm = X_d_norm.to(device).to(torch.float32)
-    
-    # Convert all weights to float32
+    # Ensure all tensors are on the same device and in float32 for stability
     gate_weight = gate_weight.float()
     up_weight = up_weight.float()
     down_weight = down_weight.float()
-    
-    # ==========================================================================
-    # COMPONENT 1: down_proj with activations (DATA-DRIVEN)
-    # Term: |W_d^ij · ||X_d^i|| / (||W_d^*j|| · ||X_d^*||)
-    # ==========================================================================
-    
-    # Transpose down_weight: [hidden_size, intermediate_size] -> [intermediate_size, hidden_size]
-    W_d_t = down_weight.t()  # [intermediate_size, hidden_size]
-    W_d_abs = torch.abs(W_d_t)
-    
-    # NUMERATOR: |W_d^ij| * ||X_d^i||
-    numerator = W_d_abs * X_d_norm.unsqueeze(1)  # [intermediate_size, hidden_size]
-    
-    # DENOMINATOR: (Σ_i |W_d^ij|) * (Σ_i ||X_d^i||)
-    W_d_column_sums = W_d_abs.sum(dim=0, keepdim=True)  # [1, hidden_size]
-    X_d_total_norm = X_d_norm.sum()  # Scalar
-    denominator = W_d_column_sums * X_d_total_norm  # [1, hidden_size]
-    
-    # Normalized term: sum over output dimension j
-    normalized_down = (numerator / (denominator + 1e-8)).sum(dim=1)  # [intermediate_size]
-    
-    # ==========================================================================
-    # COMPONENT 2: up_proj weights only (STATIC)
-    # Term: |W_u^ij| / ||W_u^i*||
-    # ==========================================================================
-    
-    up_abs = torch.abs(up_weight)  # [intermediate_size, hidden_size]
-    row_sums_up = up_abs.sum(dim=1, keepdim=True)  # [intermediate_size, 1]
-    normalized_up = (up_abs / (row_sums_up + 1e-8)).sum(dim=1)  # [intermediate_size]
-    
-    # ==========================================================================
-    # COMPONENT 3: gate_proj weights only (STATIC)
-    # Term: |W_g^ij| / ||W_g^i*||
-    # ==========================================================================
-    
-    gate_abs = torch.abs(gate_weight)  # [intermediate_size, hidden_size]
-    row_sums_gate = gate_abs.sum(dim=1, keepdim=True)  # [intermediate_size, 1]
-    normalized_gate = (gate_abs / (row_sums_gate + 1e-8)).sum(dim=1)  # [intermediate_size]
-    
-    # ==========================================================================
-    # FINAL IMPORTANCE SCORE (Equation 8)
-    # ==========================================================================
-    
-    importance_scores = normalized_down + normalized_up + normalized_gate
-    
+    X_d_norm = X_d_norm.float().to(gate_weight.device)
+
+    # -------------------------------------------------------------------------
+    # STATIC COMPONENT: MAW-style range (max + |min|) for each neuron
+    # -------------------------------------------------------------------------
+    # gate_proj and up_proj have shape [intermediate_size, hidden_size]
+    # We compute a single scalar score per neuron (row) in each matrix.
+
+    gate_score = (
+        torch.max(gate_weight, dim=1).values +
+        torch.abs(torch.min(gate_weight, dim=1).values)
+    )  # [intermediate_size]
+
+    up_score = (
+        torch.max(up_weight, dim=1).values +
+        torch.abs(torch.min(up_weight, dim=1).values)
+    )  # [intermediate_size]
+
+    # down_proj has shape [hidden_size, intermediate_size]
+    # Each column corresponds to one intermediate neuron, so we reduce over dim=0.
+    down_score = (
+        torch.max(down_weight, dim=0).values +
+        torch.abs(torch.min(down_weight, dim=0).values)
+    )  # [intermediate_size]
+
+    # -------------------------------------------------------------------------
+    # NORMALIZATION: scale each component to [0, 1] to make them comparable
+    # -------------------------------------------------------------------------
+    gate_norm = gate_score / (gate_score.max() + 1e-8)
+    up_norm = up_score / (up_score.max() + 1e-8)
+    down_norm = down_score / (down_score.max() + 1e-8)
+
+    # -------------------------------------------------------------------------
+    # COMBINATION: structural (weights) + dynamic (activations)
+    # -------------------------------------------------------------------------
+    # structural_score aggregates the normalized structural importance from
+    # gate, up, and down projections for each neuron.
+    structural_score = gate_norm + up_norm + down_norm  # [intermediate_size]
+
+    # Finally, modulate structural importance by the activation norms X_d_norm.
+    importance_scores = structural_score * X_d_norm      # [intermediate_size]
+
     return importance_scores
 
 
