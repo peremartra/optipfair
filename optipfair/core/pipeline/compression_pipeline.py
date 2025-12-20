@@ -79,8 +79,6 @@ class CompressionPipeline:
         post_compression_inference_performance: InferencePerformanceInfo | None = None
         post_compression_model_performance: List[PerplexityTestResult] | None = None
 
-        inference_benchmark_compared_result: CompareBenchmark | None = None
-
         if pipeline_config.profile_hardware:
             hardware_profile = self.hardware_profiler.retrive_hardware_information()
 
@@ -124,7 +122,8 @@ class CompressionPipeline:
         logger.info("compressing model")
         for prune_config in pipeline_config.prune_configs:
             logger.debug(prune_config)
-            self.model = self.prune_model(self.model, self.tokenizer, prune_config)
+            logger.debug(self.get_model())
+            self.model = self.prune_model(self.get_model(), self.tokenizer, prune_config)
 
         # Post compression
         logger.info("profiling model after compression")
@@ -148,7 +147,7 @@ class CompressionPipeline:
                     pipeline_config.benchmark_inference_performance.warmup_runs,
                 )
             )
-            logger.debug(f"post compression inference performance {pre_compression_inference_performance}")
+            logger.debug(f"post compression inference performance {post_compression_inference_performance}")
 
         logger.info("benchmarking model performance for compressed model")
         if pipeline_config.benchmark_model_performance.benchmark:
@@ -156,11 +155,11 @@ class CompressionPipeline:
                 self.model_performance_benchmarker.benchmark(
                     self.model,
                     self.tokenizer,
-                    pipeline_config.benchmark_model_performance.batch_size,
                     pipeline_config.benchmark_model_performance.tests,
+                    pipeline_config.benchmark_model_performance.batch_size,
                 )
             )
-            logger.debug(f"post compression model performance {pre_compression_model_performance}")
+            logger.debug(f"post compression model performance {post_compression_model_performance}")
 
         return PipelineReturn(
             hardware_profile=hardware_profile,
@@ -172,7 +171,10 @@ class CompressionPipeline:
                 inference_performance=InferencePerformance(
                     pre_compression=pre_compression_inference_performance,
                     post_compression=post_compression_inference_performance,
-                    compared_results=inference_benchmark_compared_result,
+                    compared_results=CompareBenchmark(
+                        speedup=pre_compression_inference_performance.avg_time / post_compression_inference_performance.avg_time,
+                        tps_improvement=post_compression_inference_performance.tokens_per_second - pre_compression_inference_performance.tokens_per_second,
+                    )
                 ),
                 model_performance=ModelPerformance(
                     pre_compression=pre_compression_model_performance,

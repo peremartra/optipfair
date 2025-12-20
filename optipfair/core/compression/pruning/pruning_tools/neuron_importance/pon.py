@@ -24,7 +24,7 @@ class ComputeNeuronPairImportancePonKwargs(BaseModel):
 
 @register_neuron_importance_function("pon")
 def compute_neuron_pair_importance_pon(
-    gate_weight: torch.Tensor, up_weight: torch.Tensor
+    *args, **kwargs
 ) -> torch.Tensor:
     """
     Compute neuron pair importance scores using Product of Norms method.
@@ -36,7 +36,8 @@ def compute_neuron_pair_importance_pon(
     Returns:
         importance_scores: Importance scores for each neuron pair
     """
-    gate_norms = torch.norm(gate_weight, p=1, dim=1)
-    up_norms = torch.norm(up_weight, p=1, dim=1)
+    parsed_kwargs = ComputeNeuronPairImportancePonKwargs.model_validate(kwargs)
+    gate_norms = torch.norm(parsed_kwargs.gate_weight, p=1, dim=1)
+    up_norms = torch.norm(parsed_kwargs.up_weight, p=1, dim=1)
     importance_scores = gate_norms * up_norms
     return importance_scores

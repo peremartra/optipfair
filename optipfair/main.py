@@ -1,11 +1,11 @@
 from core.pipeline.compression_pipeline import CompressionPipeline
 from core.pipeline.types.pipeline_config import PipelineConfig, BenchmarkInferencePerformance, BenchmarkModelPerformance, ProfileLLM
 from core.pipeline.types.prune_config import PruneConfig
-from core.compression.pruning.types.depth.kwargs import DepthPrunerKwargs
+from core.compression.pruning.types.attention.gqa_kwargs import GroupedQueryAttentionPrunerKwargs
+from core.compression.pruning.types.mlp_w_aligment.kwargs import MLPAlignmentPrunerKwargs
 from core.profiling.types.llm.analyze_connections import AnalyzeConnections
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
-from loguru import logger
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -43,15 +43,19 @@ if __name__ == '__main__':
         ),
         prune_configs=[
             PruneConfig(
-                prune_technique='depth',
-                prune_technique_kwargs=DepthPrunerKwargs(
-                    depth_pruning_percentage=0.1,
-                    layer_indices=[1],
-                    layer_selection_method='last',
-                    num_layers_to_remove=10,
-                    show_progress=False
+                prune_technique='gqa_attention',
+                prune_technique_kwargs=GroupedQueryAttentionPrunerKwargs(
+                    num_kv_heads_to_keep=7,
                 )
-            )
+            ),
+            PruneConfig(
+                prune_technique='mlp_alignment',
+                prune_technique_kwargs=MLPAlignmentPrunerKwargs(
+                    alignment=128,
+                    prune_percent=0.2,
+                )
+            ),
+            
         ]
     )
 
@@ -59,3 +63,5 @@ if __name__ == '__main__':
     pipe = CompressionPipeline(model=model, tokenizer=tokenizer)
     compression_pipe = pipe.run(config)
 
+    with open("pipeline_return_combine.json", "w") as f:
+        f.write(compression_pipe.model_dump_json(indent=4))

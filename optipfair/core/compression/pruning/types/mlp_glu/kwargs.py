@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 from typing import Literal, Optional
 from torch.utils.data import DataLoader
+from core.compression.pruning.types.neuron_selection_method import neuron_importance_calculation_methods
 
 
 class MlpGluPrunerKwargs(BaseModel):
@@ -15,7 +16,7 @@ class MlpGluPrunerKwargs(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    neuron_selection_method: Literal["MAW", "VOW", "PON"] = "MAW"
+    neuron_selection_method: neuron_importance_calculation_methods = "MAW"
     pruning_percentage: Optional[float] = None
     expansion_rate: Optional[float] = None
     expansion_divisor: Optional[Literal[32, 64, 128, 256]] = None

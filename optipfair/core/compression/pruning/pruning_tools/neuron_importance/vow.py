@@ -24,7 +24,7 @@ class ComputeNeuronPairImportanceVowKwargs(BaseModel):
 
 @register_neuron_importance_function("vow")
 def compute_neuron_pair_importance_vow(
-    gate_weight: torch.Tensor, up_weight: torch.Tensor
+    *args, **kwargs
 ) -> torch.Tensor:
     """
     Compute neuron pair importance scores using Variance of Weights method.
@@ -36,7 +36,8 @@ def compute_neuron_pair_importance_vow(
     Returns:
         importance_scores: Importance scores for each neuron pair
     """
-    gate_variance = torch.var(gate_weight, dim=1)
-    up_variance = torch.var(up_weight, dim=1)
+    parsed_kwargs = ComputeNeuronPairImportanceVowKwargs.model_validate(kwargs)
+    gate_variance = torch.var(parsed_kwargs.gate_weight, dim=1)
+    up_variance = torch.var(parsed_kwargs.up_weight, dim=1)
     importance_scores = gate_variance + up_variance
     return importance_scores

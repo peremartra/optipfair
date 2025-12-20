@@ -24,7 +24,7 @@ class ModelPerformance(BaseModel):
 
 class Performance(BaseModel):
     inference_performance: Optional[InferencePerformance]
-    model_performance: Optional[List[PerplexityTestResult]]
+    model_performance: Optional[ModelPerformance]
 
 class PipelineReturn(BaseModel):
     hardware_profile: Optional[HardwareProfile]

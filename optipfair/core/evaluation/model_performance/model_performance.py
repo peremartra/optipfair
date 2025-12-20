@@ -136,7 +136,7 @@ class ModelPerformanceBenchmarker:
         tokenizer: PreTrainedTokenizerBase,
         model: PreTrainedModel,
         batch_size: int = 16,
-    ):
+    ) -> PerplexityTestResult:
         dataset = load_dataset("cimec/lambada")
         result = self.evaluate_perplexity(
             dataset=dataset['test'],

@@ -3,13 +3,14 @@ from typing import Literal, Union
 from core.compression.pruning.types.depth.kwargs import DepthPrunerKwargs
 from core.compression.pruning.types.mlp_glu.kwargs import MlpGluPrunerKwargs
 from core.compression.pruning.types.block.kwargs import BlockPrunerKwargs
-from core.compression.pruning.types.attention.kwargs import AttentionPrunerKwargs
+from core.compression.pruning.types.attention.gqa_kwargs import GroupedQueryAttentionPrunerKwargs
+from core.compression.pruning.types.mlp_w_aligment.kwargs import MLPAlignmentPrunerKwargs
 
 
 class PruneConfig(BaseModel):
-    prune_technique: Literal["block", "depth", "mlp_glu", "attention"]
+    prune_technique: Literal["block", "depth", "mlp_glu", "gqa_attention", "mlp_alignment"]
     prune_technique_kwargs: Union[
-        DepthPrunerKwargs, MlpGluPrunerKwargs, BlockPrunerKwargs, AttentionPrunerKwargs
+        DepthPrunerKwargs, MlpGluPrunerKwargs, BlockPrunerKwargs, GroupedQueryAttentionPrunerKwargs, MLPAlignmentPrunerKwargs
     ]
 
     @model_validator(mode='after')
@@ -26,8 +27,14 @@ class PruneConfig(BaseModel):
             raise ValueError(
                 f"trying to prune using {self.prune_technique} prune with wrong kwargs class"
             )
-        if self.prune_technique == "attention" and not isinstance(
-            self.prune_technique_kwargs, AttentionPrunerKwargs
+        if self.prune_technique == "gqa_attention" and not isinstance(
+            self.prune_technique_kwargs, GroupedQueryAttentionPrunerKwargs
+        ):
+            raise ValueError(
+                f"trying to prune using {self.prune_technique} prune with wrong kwargs class"
+            )
+        if self.prune_technique == "mlp_alignment" and not isinstance(
+            self.prune_technique_kwargs, MLPAlignmentPrunerKwargs
         ):
             raise ValueError(
                 f"trying to prune using {self.prune_technique} prune with wrong kwargs class"
