@@ -2,15 +2,18 @@ from core.compression.pruning.base import BasePruner
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 import torch
 from torch import nn
-from core.compression.pruning.pruning_tools.calculate_attention_head_importance import compute_head_importance
-from core.compression.pruning.types.attention.gqa_kwargs import GroupedQueryAttentionPrunerKwargs
+from core.compression.pruning.pruning_tools.calculate_attention_head_importance import (
+    compute_head_importance,
+)
+from core.compression.pruning.types.attention.gqa_kwargs import (
+    GroupedQueryAttentionPrunerKwargs,
+)
 from loguru import logger
 from core.compression.pruning.factory import register_pruner
 
 
 @register_pruner("gqa_attention")
 class GroupQueryAttentionPruner(BasePruner):
-
     def prune_attention_heads(self, self_attn, prune_percent: float):
         """
         Reduces attention heads by pruning K/V heads and their associated query heads
@@ -44,7 +47,7 @@ class GroupQueryAttentionPruner(BasePruner):
         )
         kv_indices_to_keep = kv_indices_to_keep.sort().values
 
-        q_mask, k_mask, v_mask = [], [], []
+        q_mask, k_mask, v_mask = [], [], []  # type: ignore
 
         for idx in kv_indices_to_keep:
             q_start = idx.item() * num_query_groups * head_dim
@@ -90,8 +93,6 @@ class GroupQueryAttentionPruner(BasePruner):
 
         return self_attn, k_heads, k_kv_heads
 
-
-
     def prune(
         self,
         model: PreTrainedModel,
@@ -115,10 +116,14 @@ class GroupQueryAttentionPruner(BasePruner):
 
         original_kv_heads = model.config.num_key_value_heads
         if parsed_kwargs.num_kv_heads_to_keep >= original_kv_heads:
-            logger.info("Target K/V heads is >= original. No pruning will be performed.")
+            logger.info(
+                "Target K/V heads is >= original. No pruning will be performed."
+            )
             return model
 
-        prune_percent = (original_kv_heads - parsed_kwargs.num_kv_heads_to_keep) / original_kv_heads
+        prune_percent = (
+            original_kv_heads - parsed_kwargs.num_kv_heads_to_keep
+        ) / original_kv_heads
 
         new_num_attention_heads, new_num_key_value_heads = None, None
         logger.info(
@@ -127,13 +132,18 @@ class GroupQueryAttentionPruner(BasePruner):
 
         for idx, layer in enumerate(model.model.layers):
             self_attn = layer.self_attn
-            if self_attn.config.num_attention_heads == self_attn.config.num_key_value_heads:
+            if (
+                self_attn.config.num_attention_heads
+                == self_attn.config.num_key_value_heads
+            ):
                 logger.info(
                     f"Skipping attention pruning for layer {idx}: Not GQA or already fully pruned."
                 )
                 continue
 
-            _, k_heads, k_kv_heads = self.prune_attention_heads(self_attn, prune_percent)
+            _, k_heads, k_kv_heads = self.prune_attention_heads(
+                self_attn, prune_percent
+            )
             if new_num_attention_heads is None:
                 new_num_attention_heads = k_heads
                 new_num_key_value_heads = k_kv_heads

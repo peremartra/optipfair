@@ -23,9 +23,7 @@ class ComputeNeuronPairImportanceVowKwargs(BaseModel):
 
 
 @register_neuron_importance_function("vow")
-def compute_neuron_pair_importance_vow(
-    *args, **kwargs
-) -> torch.Tensor:
+def compute_neuron_pair_importance_vow(*args, **kwargs) -> torch.Tensor:
     """
     Compute neuron pair importance scores using Variance of Weights method.
 

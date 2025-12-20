@@ -23,9 +23,7 @@ class ComputeNeuronPairImportancePonKwargs(BaseModel):
 
 
 @register_neuron_importance_function("pon")
-def compute_neuron_pair_importance_pon(
-    *args, **kwargs
-) -> torch.Tensor:
+def compute_neuron_pair_importance_pon(*args, **kwargs) -> torch.Tensor:
     """
     Compute neuron pair importance scores using Product of Norms method.
 

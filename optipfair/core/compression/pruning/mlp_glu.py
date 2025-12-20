@@ -439,10 +439,7 @@ class MlpGluPruner(BasePruner):
             mlp.up_proj = new_up_proj
             mlp.down_proj = new_down_proj
 
-
-        if hasattr(model, "config") and hasattr(
-            model.config, "intermediate_size"
-        ):
+        if hasattr(model, "config") and hasattr(model.config, "intermediate_size"):
             model.config.intermediate_size = new_intermediate_size
             logger.info(
                 f"Updated model config: intermediate_size = {new_intermediate_size}"

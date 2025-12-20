@@ -61,14 +61,15 @@ class CompressionPipeline:
     ) -> PreTrainedModel:
         prune_impl = prune_factory(prune_config.prune_technique)
         return prune_impl.prune(
-            model=model, tokenizer=tokenizer, **prune_config.prune_technique_kwargs.model_dump(mode='python')
+            model=model,
+            tokenizer=tokenizer,
+            **prune_config.prune_technique_kwargs.model_dump(mode="python"),
         )
-    
+
     def get_model(self) -> PreTrainedModel:
         return self.model
 
     def run(self, pipeline_config: PipelineConfig) -> PipelineReturn:
-
         hardware_profile: HardwareProfile | None = None
 
         pre_compression_model_profile: LLMInfo | None = None
@@ -104,7 +105,9 @@ class CompressionPipeline:
                     pipeline_config.benchmark_inference_performance.warmup_runs,
                 )
             )
-            logger.debug(f"pre compression inference performance {pre_compression_inference_performance}")
+            logger.debug(
+                f"pre compression inference performance {pre_compression_inference_performance}"
+            )
 
         logger.info("benchmarking model performance for uncompressed model")
         if pipeline_config.benchmark_model_performance.benchmark:
@@ -116,14 +119,18 @@ class CompressionPipeline:
                     pipeline_config.benchmark_model_performance.batch_size,
                 )
             )
-            logger.debug(f"pre compression model performance {pre_compression_model_performance}")
+            logger.debug(
+                f"pre compression model performance {pre_compression_model_performance}"
+            )
 
         # Compression
         logger.info("compressing model")
         for prune_config in pipeline_config.prune_configs:
             logger.debug(prune_config)
             logger.debug(self.get_model())
-            self.model = self.prune_model(self.get_model(), self.tokenizer, prune_config)
+            self.model = self.prune_model(
+                self.get_model(), self.tokenizer, prune_config
+            )
 
         # Post compression
         logger.info("profiling model after compression")
@@ -147,7 +154,9 @@ class CompressionPipeline:
                     pipeline_config.benchmark_inference_performance.warmup_runs,
                 )
             )
-            logger.debug(f"post compression inference performance {post_compression_inference_performance}")
+            logger.debug(
+                f"post compression inference performance {post_compression_inference_performance}"
+            )
 
         logger.info("benchmarking model performance for compressed model")
         if pipeline_config.benchmark_model_performance.benchmark:
@@ -159,7 +168,9 @@ class CompressionPipeline:
                     pipeline_config.benchmark_model_performance.batch_size,
                 )
             )
-            logger.debug(f"post compression model performance {post_compression_model_performance}")
+            logger.debug(
+                f"post compression model performance {post_compression_model_performance}"
+            )
 
         return PipelineReturn(
             hardware_profile=hardware_profile,
@@ -172,9 +183,21 @@ class CompressionPipeline:
                     pre_compression=pre_compression_inference_performance,
                     post_compression=post_compression_inference_performance,
                     compared_results=CompareBenchmark(
-                        speedup=pre_compression_inference_performance.avg_time / post_compression_inference_performance.avg_time,
-                        tps_improvement=post_compression_inference_performance.tokens_per_second - pre_compression_inference_performance.tokens_per_second,
-                    )
+                        speedup=(
+                            pre_compression_inference_performance.avg_time
+                            / post_compression_inference_performance.avg_time
+                        )
+                        if pre_compression_inference_performance
+                        and post_compression_inference_performance
+                        else None and pre_compression_inference_performance.avg_time,
+                        tps_improvement=(
+                            post_compression_inference_performance.tokens_per_second
+                            - pre_compression_inference_performance.tokens_per_second
+                        )
+                        if pre_compression_inference_performance
+                        and post_compression_inference_performance
+                        else None,
+                    ),
                 ),
                 model_performance=ModelPerformance(
                     pre_compression=pre_compression_model_performance,

@@ -96,7 +96,7 @@ class ModelPerformanceBenchmarker:
         tokenizer: PreTrainedTokenizerBase,
         model: PreTrainedModel,
         batch_size: int = 16,
-        num_examples: int = 2
+        num_examples: int = 2,
     ) -> ComputePerplexityForDatasetReturn:
         """
         Computes perplexity for an entire Hugging Face Dataset by processing it in batches.
@@ -113,7 +113,11 @@ class ModelPerformanceBenchmarker:
             scores for each example and the overall mean perplexity across the entire dataset.
         """
         all_perplexities: List[float] = []
-        effective_size: int = min(len(dataset), num_examples) if num_examples is not None else len(dataset)
+        effective_size: int = (
+            min(len(dataset), num_examples)
+            if num_examples is not None
+            else len(dataset)
+        )
 
         for i in range(0, effective_size, batch_size):
             batch_end: int = min(i + batch_size, effective_size)
@@ -139,7 +143,7 @@ class ModelPerformanceBenchmarker:
     ) -> PerplexityTestResult:
         dataset = load_dataset("cimec/lambada")
         result = self.evaluate_perplexity(
-            dataset=dataset['test'],
+            dataset=dataset["test"],
             text_column="text",
             batch_size=batch_size,
             model=model,

@@ -8,16 +8,18 @@ from core.evaluation.model_performance.model_performance import (
 )
 from typing import Literal, Set
 
+
 class ProfileLLM(BaseModel):
     profile: bool = True
-    analyze_connections: AnalyzeConnections = AnalyzeConnections(input_shape=(1,512))
+    analyze_connections: AnalyzeConnections = AnalyzeConnections(input_shape=(1, 512))
     estimate_memory: EstimateMemory = EstimateMemory(batch_size=4, sequence_length=512)
     verbose: bool = True
+
 
 class BenchmarkModelPerformance(BaseModel):
     benchmark: bool = True
     batch_size: int = 4
-    tests: Set[Literal[ACCURACY_TESTS, PERPLEXITY_TESTS]] = {'lambada'}
+    tests: Set[Literal[ACCURACY_TESTS, PERPLEXITY_TESTS]] = {"lambada"}  # type: ignore
 
 
 class BenchmarkInferencePerformance(BaseModel):
@@ -26,6 +28,7 @@ class BenchmarkInferencePerformance(BaseModel):
     max_new_tokens: int = 100
     num_runs: int = 20
     warmup_runs: int = 2
+
 
 class PipelineConfig(BaseModel):
     prune_configs: List[PruneConfig]

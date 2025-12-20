@@ -11,6 +11,7 @@ class ComputeNeuronPairImportanceMaxAbsWeightKwargs(BaseModel):
     gate_weight: torch.Tensor
     up_weight: torch.Tensor
 
+
 @register_neuron_importance_function("max_abs_weight")
 def compute_neuron_pair_importance_max_abs_weight(*args, **kwargs) -> torch.Tensor:
     """

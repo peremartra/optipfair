@@ -13,21 +13,24 @@ class LLMProfile(BaseModel):
     pre_compression: Optional[LLMInfo]
     post_compression: Optional[LLMInfo]
 
+
 class InferencePerformance(BaseModel):
     pre_compression: Optional[InferencePerformanceInfo]
     post_compression: Optional[InferencePerformanceInfo]
     compared_results: Optional[CompareBenchmark]
 
+
 class ModelPerformance(BaseModel):
     pre_compression: Optional[List[PerplexityTestResult]]
     post_compression: Optional[List[PerplexityTestResult]]
+
 
 class Performance(BaseModel):
     inference_performance: Optional[InferencePerformance]
     model_performance: Optional[ModelPerformance]
 
+
 class PipelineReturn(BaseModel):
     hardware_profile: Optional[HardwareProfile]
     llm_profile: Optional[LLMProfile]
     performance: Optional[Performance]
-    

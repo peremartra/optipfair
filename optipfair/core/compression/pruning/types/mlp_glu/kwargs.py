@@ -1,7 +1,9 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 from typing import Literal, Optional
 from torch.utils.data import DataLoader
-from core.compression.pruning.types.neuron_selection_method import neuron_importance_calculation_methods
+from core.compression.pruning.types.neuron_selection_method import (
+    neuron_importance_calculation_methods,
+)
 
 
 class MlpGluPrunerKwargs(BaseModel):

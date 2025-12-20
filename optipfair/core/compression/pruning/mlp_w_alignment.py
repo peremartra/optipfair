@@ -2,18 +2,20 @@ import torch
 from core.compression.pruning.base import BasePruner
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from torch import nn
-from core.compression.pruning.types.mlp_w_aligment.kwargs import MLPAlignmentPrunerKwargs
+from core.compression.pruning.types.mlp_w_aligment.kwargs import (
+    MLPAlignmentPrunerKwargs,
+)
 from loguru import logger
 from core.compression.pruning.pruning_tools.neuron_importance.factory import (
-    factory as neuron_importance_fn_factory
+    factory as neuron_importance_fn_factory,
 )
 from core.compression.pruning.factory import register_pruner
 
-@register_pruner('mlp_alignment')
+
+@register_pruner("mlp_alignment")
 class MLPAlignmentPruner(BasePruner):
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
     def prune_neuron_pairs(self, mlp, prune_percent: float, alignment: int = 128):
         """
@@ -21,10 +23,12 @@ class MLPAlignmentPruner(BasePruner):
         """
         gate_weight = mlp.gate_proj.weight.data.float()
         up_weight = mlp.up_proj.weight.data.float()
-        
-        #TODO: make the calculation of neuron importance function dynamic based on user choice
+
+        # TODO: make the calculation of neuron importance function dynamic based on user choice
         neuron_importance_function = neuron_importance_fn_factory("max_abs_weight")
-        importance_scores = neuron_importance_function(gate_weight=gate_weight, up_weight=up_weight)
+        importance_scores = neuron_importance_function(
+            gate_weight=gate_weight, up_weight=up_weight
+        )
 
         original_intermediate_size = gate_weight.size(0)
 
@@ -46,9 +50,13 @@ class MLPAlignmentPruner(BasePruner):
         indices_to_keep = indices_to_keep.sort().values
 
         # Create new layers
-        new_gate_proj = nn.Linear(mlp.gate_proj.in_features, k, bias=False).to(self.device)
+        new_gate_proj = nn.Linear(mlp.gate_proj.in_features, k, bias=False).to(
+            self.device
+        )
         new_up_proj = nn.Linear(mlp.up_proj.in_features, k, bias=False).to(self.device)
-        new_down_proj = nn.Linear(k, mlp.down_proj.out_features, bias=False).to(self.device)
+        new_down_proj = nn.Linear(k, mlp.down_proj.out_features, bias=False).to(
+            self.device
+        )
 
         # Assign weights
         new_gate_proj.weight.data = mlp.gate_proj.weight.data[indices_to_keep, :]
@@ -57,13 +65,13 @@ class MLPAlignmentPruner(BasePruner):
 
         return new_gate_proj, new_up_proj, new_down_proj, k
 
-
-    def prune(self,
+    def prune(
+        self,
         model: PreTrainedModel,
         tokenizer: PreTrainedTokenizerBase,
         *args,
-        **kwargs,) -> PreTrainedModel:
-
+        **kwargs,
+    ) -> PreTrainedModel:
         parsed_kwargs = MLPAlignmentPrunerKwargs.model_validate(kwargs)
         new_intermediate_size = None
 
@@ -73,8 +81,10 @@ class MLPAlignmentPruner(BasePruner):
             mlp = layer.mlp
 
             # Pass the alignment parameter
-            new_gate_proj, new_up_proj, new_down_proj, new_size = self.prune_neuron_pairs(
-                mlp, parsed_kwargs.prune_percent, alignment=parsed_kwargs.alignment
+            new_gate_proj, new_up_proj, new_down_proj, new_size = (
+                self.prune_neuron_pairs(
+                    mlp, parsed_kwargs.prune_percent, alignment=parsed_kwargs.alignment
+                )
             )
 
             mlp.gate_proj = new_gate_proj

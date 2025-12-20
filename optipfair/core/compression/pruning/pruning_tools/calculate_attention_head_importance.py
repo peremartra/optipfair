@@ -1,5 +1,6 @@
 import torch
 
+
 def compute_head_importance(self_attn, num_attention_heads, head_dim):
     """
     Computes importance scores for each attention head based on the L2 norm of its
