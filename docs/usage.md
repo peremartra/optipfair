@@ -1,6 +1,14 @@
 # Usage Guide
 This guide provides detailed instructions on how to use the core functionalities of OptiPFair, from pruning models to analyzing bias.
 
+---
+
+**Note on Terminology:** The default neuron selection method is **PPM (Peak-to-Peak Magnitude)**, which calculates neuron importance based on the full dynamic range of weights (max + |min|). This method is formally described in: *Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671*
+
+For backward compatibility, the parameter value `"MAW"` is still accepted and maps to PPM.
+
+---
+
 ## Python API
 
 OptiPFair provides a simple Python API for pruning models.
@@ -14,7 +22,7 @@ from optipfair import prune_model
 # Load a pre-trained model
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 
-# Prune the model with default settings (10% pruning, MAW method)
+# Prune the model with default settings (10% pruning, PPM method)
 pruned_model = prune_model(model=model)
 
 # Save the pruned model
@@ -48,7 +56,7 @@ OptiPFair provides a command-line interface for pruning models:
 ### Basic Usage
 
 ```bash
-# Prune a model with default settings (10% pruning, MAW method)
+# Prune a model with default settings (10% pruning, PPM method)
 optipfair prune --model-path meta-llama/Llama-3.2-1B --output-path ./pruned-model
 ```
 
@@ -77,14 +85,14 @@ optipfair analyze --model-path meta-llama/Llama-3.2-1B
 
 OptiPFair supports three methods for calculating neuron importance:
 
-### MAW (Maximum Absolute Weight)
+### PPM (Peak-to-Peak Magnitude)
 
-The MAW method identifies neurons based on the maximum absolute weight values in their connections. This is typically the most effective method for GLU architectures.
+The PPM method identifies neurons based on the peak-to-peak magnitude of weights (max + |min|), capturing the full dynamic range of each neuron's weight values. This is typically the most effective method for GLU architectures. Use parameter value `"MAW"` for backward compatibility.
 
 ```python
 pruned_model = prune_model(
     model=model,
-    neuron_selection_method="MAW",
+    neuron_selection_method="MAW",  # PPM method ("MAW" for compatibility)
     pruning_percentage=20
 )
 ```
@@ -260,9 +268,9 @@ pruned_datadriven = prune_model(
 ### Troubleshooting
 
 #### Error: "Data-driven pruning with dataloader is only supported for 'MAW' method"
-**Solution:** Change `neuron_selection_method` to `"MAW"`:
+**Solution:** Change `neuron_selection_method` to `"MAW"` (PPM method):
 ```python
-pruned = prune_model(model, neuron_selection_method="MAW", dataloader=dl)
+pruned = prune_model(model, neuron_selection_method="MAW", dataloader=dl)  # PPM method
 ```
 
 #### Out of Memory during calibration

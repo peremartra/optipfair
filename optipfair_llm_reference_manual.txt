@@ -6,6 +6,14 @@ Designed to be used with you favourite LLM (ChatGPT / Claude / Gemini / Cursor /
 
 OptiPFair is a Python library for structured pruning of large language models, with a primary focus on GLU architectures. It also provides built-in functionality for bias visualization and analysis. This guide provides comprehensive information on using all of OptiPFair's features.
 
+---
+
+**Note on Terminology:** The neuron selection method PPM (Peak-to-Peak Magnitude) is the default and most effective method for GLU architectures. This method is formally described in: *Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671*
+
+For backward compatibility, the parameter value `"MAW"` is still accepted and maps to the PPM method.
+
+---
+
 ## Installation
 
 ```bash
@@ -41,7 +49,7 @@ from optipfair import prune_model
 # Load a pre-trained model
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 
-# Basic usage (10% pruning with MAW method)
+# Basic usage (10% pruning with PPM method)
 pruned_model = prune_model(model)
 
 # Advanced MLP GLU pruning
@@ -209,9 +217,9 @@ optipfair prune \
 
 OptiPFair supports three methods for calculating neuron importance (used with MLP_GLU pruning only):
 
-1. **MAW (Maximum Absolute Weight)** - Default method that identifies neurons based on the maximum absolute weight values in their connections. Most effective for GLU architectures.
+1. **PPM (Peak-to-Peak Magnitude)** - Default method that identifies neurons based on the peak-to-peak magnitude of weights (calculated as max + |min| for each neuron). This captures the full dynamic range of weight values and is most effective for GLU architectures. Parameter value: `"MAW"` (maintained for backward compatibility).
 
-   **Static MAW (weight-only):**
+   **Static PPM (weight-only):**
 ```python
    pruned_model = prune_model(
        model=model,
@@ -250,9 +258,9 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
    - Useful for optimizing performance on specific hardware (GPUs, TPUs)
    - Common practice: use 128 or 256 for modern GPUs
 
-   **Data-Driven MAW (hybrid: weights + activations):**
+   **Data-Driven PPM (hybrid: weights + activations):**
    
-   When you provide a dataloader, MAW switches to a hybrid importance calculation that combines:
+   When you provide a dataloader, PPM switches to a hybrid importance calculation that combines:
    - Static weight magnitudes from `gate_proj` and `up_proj` layers
    - Dynamic activation statistics from `down_proj` captured during calibration
    
@@ -380,7 +388,7 @@ pruned_model = prune_model(
     show_progress=True
 )
 
-# All methods (MAW, VOW, PON) support selective pruning
+# All methods (PPM/MAW, VOW, PON) support selective pruning
 pruned_model = prune_model(
     model=model,
     pruning_type="MLP_GLU",
@@ -560,6 +568,18 @@ The process consists of three phases:
 
 **Phase 2: Hybrid Importance Calculation**
 
+⚠️  **Important Note on Method Selection:**
+The hybrid importance calculation ALWAYS uses PPM (Peak-to-Peak Magnitude) internally,
+regardless of which neuron_selection_method parameter is specified. This means:
+- When using dataloader with neuron_selection_method="MAW" (PPM), you get:
+  * Structural importance: PPM-based weights + activations (HYBRID)
+  * Dynamic importance: Activation norms from calibration
+- Other methods (VOW, PON) do NOT support data-driven pruning with dataloader
+- Data-driven pruning is only compatible with PPM/'MAW' method
+
+This design ensures the most effective hybrid approach combines PPM's superior
+weight range analysis with activation-driven pruning decisions.
+
 The importance score combines three components (CFSP Equation 8):
 - **Component 1 (down_proj)**: Weights × Activations (DATA-DRIVEN)
 - **Component 2 (up_proj)**: Weight magnitudes only (STATIC)
@@ -683,7 +703,7 @@ datadriven_pruned = prune_model(
 
 #### Error Handling
 ```python
-# Only MAW supports dataloader
+# Only PPM (parameter "MAW") supports dataloader
 try:
     pruned = prune_model(
         model=model,
@@ -692,7 +712,7 @@ try:
     )
 except ValueError as e:
     print(f"Error: {e}")
-    # Use MAW instead
+    # Use PPM (parameter "MAW") instead
     pruned = prune_model(
         model=model,
         neuron_selection_method="MAW",

@@ -2,6 +2,14 @@
 
 This page provides detailed examples of using OptiPFair for pruning language models and visualizing bias.
 
+---
+
+**Note on Terminology:** The default neuron selection method is **PPM (Peak-to-Peak Magnitude)**, which calculates neuron importance based on the full dynamic range of weights (max + |min|). This method is formally described in: *Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671*
+
+For backward compatibility, the parameter value `"MAW"` is still accepted and maps to PPM.
+
+---
+
 ## Basic Pruning Example
 
 This example demonstrates how to prune a LLaMA model using the default settings:
@@ -29,7 +37,7 @@ outputs = model.generate(inputs.input_ids, max_length=50)
 original_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
 print(f"Original model output: {original_output}")
 
-# Apply pruning with default settings (10% pruning, MAW method)
+# Apply pruning with default settings (10% pruning, PPM method)
 pruned_model = prune_model(model)
 
 # Get pruned parameter count

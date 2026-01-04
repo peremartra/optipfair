@@ -30,6 +30,8 @@
 
 ---
 > **New to optipfair?** Use our [LLM Reference Manual](optipfair_llm_reference_manual.txt) - paste it into ChatGPT, Claude or your Favourite LLM for guided assistance with any optipfair task.
+
+> **Note on Terminology:** The default neuron selection method is **PPM (Peak-to-Peak Magnitude)**, which calculates neuron importance based on the full dynamic range of weights (max + |min|). This method is formally described in: *Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671*. For backward compatibility, the parameter value `"MAW"` is still accepted and maps to PPM.
 ### 🚀 Interactive Demos: Try optipfair NOW
 
 Experience optipfair's capabilities directly in your browser.
@@ -99,7 +101,7 @@ See how to use optipfair's core features in just a few lines of code.
 
 ### Pruning with the Python API
 
-Prune 20% of the MLP neurons from a model using the Maximum Absolute Weight (MAW) method.
+Prune 20% of the MLP neurons from a model using the Peak-to-Peak Magnitude (PPM) method.
 
 ```python
 from transformers import AutoModelForCausalLM
@@ -135,7 +137,7 @@ The pruning process yields tangible results in model size and performance. Here'
 | **Inference Speed** | *Benchmark in progress* | *Benchmark in progress* | *Coming soon* |
 | **MMLU Score** | *Benchmark in progress* | *Benchmark in progress* | *Minimal change expected* |
 
-*Results based on the [MAW pruning method](#neuron-selection-methods). Full benchmark results will be published shortly.*
+*Results based on the [PPM pruning method](#neuron-selection-methods) (parameter `"MAW"`). Full benchmark results will be published shortly.*
 
 ### Data-Driven Width Pruning (NEW in v0.2.0)
 
@@ -165,7 +167,7 @@ dataloader = DataLoader(dataset, batch_size=8)
 # Prune with data-driven importance calculation
 pruned_model, stats = prune_model(
     model=model,
-    neuron_selection_method="MAW",  # Only MAW supports data-driven pruning
+    neuron_selection_method="MAW",  # Only PPM (parameter "MAW") supports data-driven pruning
     pruning_percentage=20,
     dataloader=dataloader,  # ← Enables hybrid pruning
     show_progress=True,
@@ -182,7 +184,7 @@ pruned_model.save_pretrained("./pruned-datadriven-model")
 - 🔬 **Research-Backed**: Based on CFSP methodology (arXiv:2409.13199v2)
 - ⚡ **Easy Integration**: Just add a dataloader - no other changes needed
 
-**Note:** Data-driven pruning is currently only available with `neuron_selection_method="MAW"`. Using a dataloader with "VOW" or "PON" will raise a `ValueError`.
+**Note:** Data-driven pruning is currently only available with `neuron_selection_method="MAW"` (PPM method). Using a dataloader with "VOW" or "PON" will raise a `ValueError`.
 
 ### Selective Layer Width Pruning (NEW in v0.2.0)
 
@@ -425,7 +427,7 @@ optipfair is designed to work with transformer-based language models that use GL
 optipfair offers two powerful structured pruning strategies:
 
 1.  **MLP Pruning (Width Pruning)**: Reduces the number of neurons within the MLP layers of GLU-based models. This is a fine-grained approach to improve efficiency. You can control it via `pruning_percentage` or a target `expansion_rate`. It uses several neuron importance metrics:
-    * **MAW (Maximum Absolute Weight)**: Default and most effective method.
+    * **PPM (Peak-to-Peak Magnitude)**: Default and most effective method (parameter `"MAW"` for backward compatibility).
     * **VOW (Variance of Weights)**
     * **PON (Product of Norms)**
 

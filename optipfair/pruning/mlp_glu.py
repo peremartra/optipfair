@@ -208,7 +208,16 @@ def run_calibration_forward_passes(
 
 def compute_neuron_pair_importance_maw(gate_weight: torch.Tensor, up_weight: torch.Tensor) -> torch.Tensor:
     """
-    Compute neuron pair importance scores using Maximum Absolute Weight method.
+    Compute neuron pair importance scores using Peak-to-Peak Magnitude (PPM) method.
+    
+    This method calculates importance as the sum of the peak-to-peak magnitude
+    (max + |min|) of weights for each neuron in both gate_proj and up_proj layers.
+    
+    Reference: Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: 
+    The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671
+    
+    Note: For backward compatibility, this function is also accessible via the
+    "MAW" parameter name in pruning functions.
     
     Args:
         gate_weight: Weight matrix from the gate_proj layer
@@ -261,15 +270,24 @@ def compute_neuron_pair_importance_maw_hybrid(
     X_d_norm: torch.Tensor
 ) -> torch.Tensor:
     """
-    Compute neuron pair importance using a hybrid MAW + activations method.
+    Compute neuron pair importance using a hybrid PPM + activations method.
 
     This implementation combines:
-    - Structural importance from weights (MAW-style range: max + |min|)
+    - Structural importance from weights (PPM-style range: max + |min|)
       for gate_proj, up_proj, and down_proj.
     - Dynamic importance from activation norms X_d_norm collected during calibration.
 
+    Reference: Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following:
+    The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671
+
+    Important: This function ALWAYS uses PPM internally for computing structural importance,
+    regardless of which neuron_selection_method is used in the pruning call. The hybrid
+    calculation is exclusively available for data-driven pruning and combines PPM-based
+    weight analysis with activation statistics. Other methods (VOW, PON) are only used
+    in static (weight-only) pruning and do NOT support data-driven mode.
+
     The final score for neuron i is:
-        importance_i = (MAW_gate_i_norm + MAW_up_i_norm + MAW_down_i_norm) * X_d_norm_i
+        importance_i = (PPM_gate_i_norm + PPM_up_i_norm + PPM_down_i_norm) * X_d_norm_i
 
     Args:
         gate_weight: Weight matrix from gate_proj [intermediate_size, hidden_size]
@@ -287,7 +305,7 @@ def compute_neuron_pair_importance_maw_hybrid(
     X_d_norm = X_d_norm.float().to(gate_weight.device)
 
     # -------------------------------------------------------------------------
-    # STATIC COMPONENT: MAW-style range (max + |min|) for each neuron
+    # STATIC COMPONENT: PPM-style range (max + |min|) for each neuron
     # -------------------------------------------------------------------------
     # gate_proj and up_proj have shape [intermediate_size, hidden_size]
     # We compute a single scalar score per neuron (row) in each matrix.
@@ -331,6 +349,7 @@ def compute_neuron_pair_importance_maw_hybrid(
 
 # Dictionary mapping method names to their respective functions
 IMPORTANCE_FUNCTIONS = {
+    "PPM": compute_neuron_pair_importance_maw,
     "MAW": compute_neuron_pair_importance_maw,
     "VOW": compute_neuron_pair_importance_vow,
     "PON": compute_neuron_pair_importance_pon,
@@ -490,19 +509,26 @@ def prune_model_mlp_glu(
     show_progress: bool = True,
 ) -> PreTrainedModel:
     """
-    Prune the MLP layers in a model with GLU architecture.
+    Prune the MLP layers in a model with GLU architecture using PPM (Peak-to-Peak Magnitude) method.
+    
+    The default neuron selection method PPM calculates importance based on the full dynamic
+    range of weights (max + |min|). For backward compatibility, the parameter value "MAW"
+    is accepted and maps to PPM.
+    
+    Reference: Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following:
+    The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671
     
     Args:
         model: Pre-trained model to prune
-        neuron_selection_method: Method to use for calculating neuron importance ("MAW", "VOW", or "PON")
+        neuron_selection_method: Method to use for calculating neuron importance ("MAW"/PPM, "VOW", or "PON")
         pruning_percentage: Percentage of neurons to prune (0-100)
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage)
         expansion_divisor: Optional divisor (32, 64, 128, 256, or None) to round intermediate layer size.
             When specified, the intermediate size will be rounded to the nearest multiple after applying
             pruning. Cannot be used alone - requires either pruning_percentage or expansion_rate.
         dataloader: Optional DataLoader for data-driven pruning. When provided with
-            neuron_selection_method='MAW', enables hybrid importance calculation using
-            both weight magnitudes and activation statistics. Only compatible with 'MAW'.
+            neuron_selection_method='MAW' (PPM method), enables hybrid importance calculation using
+            both weight magnitudes and activation statistics. Only compatible with PPM/'MAW'.
         layer_indices: Optional list of layer indices to prune. If None, all layers are pruned.
             When specified, only the listed layers will have their neurons pruned; other layers remain unchanged.
         show_progress: Whether to show progress during pruning
@@ -560,7 +586,7 @@ def prune_model_mlp_glu(
     # Validate dataloader compatibility 
     if dataloader is not None and neuron_selection_method != "MAW":
         raise ValueError(
-            f"Data-driven pruning with dataloader is only supported for 'MAW' method. "
+            f"Data-driven pruning with dataloader is only supported for PPM method (parameter 'MAW'). "
             f"Got neuron_selection_method='{neuron_selection_method}'. "
             f"Please use neuron_selection_method='MAW' or remove the dataloader parameter."
         )    

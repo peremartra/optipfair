@@ -1,5 +1,13 @@
 # API Reference
 
+---
+
+**Note on Terminology:** The default neuron selection method is **PPM (Peak-to-Peak Magnitude)**, which calculates neuron importance based on the full dynamic range of weights (max + |min|). This method is formally described in: *Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671*
+
+For backward compatibility, the parameter value `"MAW"` is still accepted and maps to PPM.
+
+---
+
 ## Core Functions
 
 ### `prune_model`
@@ -24,13 +32,13 @@ def prune_model(
     Prune a pre-trained language model using the specified pruning method.
     
     Supports both width pruning (neuron-level) and depth pruning (layer-level).
-    For width pruning with MAW method, can use static (weight-only) or hybrid
+    For width pruning with PPM method (parameter "MAW"), can use static (weight-only) or hybrid
     (weight + activation) importance calculation.
     
     Args:
         model: Pre-trained model to prune
         pruning_type: Type of pruning to apply ("MLP_GLU" or "DEPTH")
-        neuron_selection_method: Method to calculate neuron importance ("MAW", "VOW", or "PON") - for MLP_GLU only
+        neuron_selection_method: Method to calculate neuron importance ("MAW"/PPM, "VOW", or "PON") - for MLP_GLU only
         pruning_percentage: Percentage of neurons to prune (0-100) - for MLP_GLU only
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage) - for MLP_GLU only
         dataloader: Optional PyTorch DataLoader for data-driven pruning (MLP_GLU with MAW only).
@@ -40,7 +48,7 @@ def prune_model(
             or as tuples of (input_ids, attention_mask). Typically 100-1000 samples
             from your target domain yield best results.
             
-            **Compatibility:** Only works with neuron_selection_method='MAW'.
+            **Compatibility:** Only works with neuron_selection_method='MAW' (PPM method).
             Will raise ValueError if used with 'VOW' or 'PON'.
             
             **Example:**
@@ -62,7 +70,7 @@ def prune_model(
         
     Raises:
         ValueError: If parameters are invalid or incompatible
-        ValueError: If dataloader is provided with non-MAW method
+        ValueError: If dataloader is provided with non-PPM method (use "MAW" parameter)
         
     Examples:
         >>> # Static width pruning (traditional)

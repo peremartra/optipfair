@@ -1,3 +1,16 @@
+## [Unreleased]
+
+### 📝 Documentation Updates
+
+#### Terminology Update: MAW → PPM
+- **New Nomenclature**: The neuron selection method previously known as "MAW (Maximum Absolute Weight)" is now officially documented as **PPM (Peak-to-Peak Magnitude)**, which more accurately describes the calculation method (max + |min|).
+- **Backward Compatibility**: The parameter value `"MAW"` is maintained for full backward compatibility and maps to the PPM method.
+- **Research Foundation**: PPM is formally described in: *Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671*
+- **Updated Documentation**: All documentation files now reference PPM as the primary name with MAW noted as the legacy parameter value.
+- **No Breaking Changes**: No code changes required; all existing code using `neuron_selection_method="MAW"` continues to work exactly as before.
+
+---
+
 ## [0.2.3] - 2025-12-04
 
 ### 🐛 Bug Fixes
