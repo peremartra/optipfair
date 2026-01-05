@@ -105,13 +105,13 @@ Prune 20% of the MLP neurons from a model using the Peak-to-Peak Magnitude (PPM)
 
 ```python
 from transformers import AutoModelForCausalLM
-from optipfair import prune_model
+import optipfair as opf
 
 # Load a pre-trained model
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 
 # Prune 20% of neurons from MLP layers
-pruned_model, stats = prune_model(
+pruned_model, stats = opf.prune_model(
     model=model,
     pruning_type="MLP_GLU",
     neuron_selection_method="MAW",
@@ -146,7 +146,7 @@ Enhance pruning decisions with activation statistics from calibration data. This
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from torch.utils.data import DataLoader, TensorDataset
 import torch
-from optipfair import prune_model
+import optipfair as opf
 
 # Load model and tokenizer
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
@@ -165,7 +165,7 @@ dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
 dataloader = DataLoader(dataset, batch_size=8)
 
 # Prune with data-driven importance calculation
-pruned_model, stats = prune_model(
+pruned_model, stats = opf.prune_model(
     model=model,
     neuron_selection_method="MAW",  # Only PPM (parameter "MAW") supports data-driven pruning
     pruning_percentage=20,
@@ -192,13 +192,13 @@ Prune neurons only in specific layers while leaving others unchanged. Perfect fo
 
 ```python
 from transformers import AutoModelForCausalLM
-from optipfair import prune_model
+import optipfair as opf
 
 # Load a pre-trained model
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 
 # Prune neurons only in specific layers (e.g., middle layers)
-pruned_model, stats = prune_model(
+pruned_model, stats = opf.prune_model(
     model=model,
     pruning_type="MLP_GLU",
     neuron_selection_method="MAW",
@@ -234,13 +234,13 @@ The `expansion_divisor` parameter ensures that intermediate layer sizes are divi
 
 ```python
 from transformers import AutoModelForCausalLM
-from optipfair import prune_model
+import optipfair as opf
 
 # Load model
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 
 # Prune with hardware optimization
-pruned_model, stats = prune_model(
+pruned_model, stats = opf.prune_model(
     model=model,
     neuron_selection_method="MAW",
     pruning_percentage=20,
@@ -269,13 +269,13 @@ Prune neurons only in specific layers while leaving others unchanged. Perfect fo
 
 ```python
 from transformers import AutoModelForCausalLM
-from optipfair import prune_model
+import optipfair as opf
 
 # Load a pre-trained model
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 
 # Prune neurons only in specific layers (e.g., middle layers)
-pruned_model, stats = prune_model(
+pruned_model, stats = opf.prune_model(
     model=model,
     pruning_type="MLP_GLU",
     neuron_selection_method="MAW",
@@ -287,7 +287,7 @@ pruned_model, stats = prune_model(
 
 # Print pruning statistics
 print(f"Pruned {stats['pruned_layers']} of {stats['total_layers']} layers")
-print(f"Total reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)
+print(f"Total reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)")
 
 # Save the pruned model
 pruned_model.save_pretrained("./selective-pruned-llama")
@@ -311,13 +311,13 @@ Remove entire layers from a model for significant efficiency gains. Here, we rem
 
 ```python
 from transformers import AutoModelForCausalLM
-from optipfair import prune_model
+import optipfair as opf
 
 # Load a pre-trained model
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 
 # Remove the last 4 transformer layers
-pruned_model, stats = prune_model(
+pruned_model, stats = opf.prune_model(
     model=model,
     pruning_type="DEPTH",
     num_layers_to_remove=4,
