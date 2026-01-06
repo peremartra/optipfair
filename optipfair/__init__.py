@@ -45,7 +45,7 @@ def prune_model(
     Args:
         model: Pre-trained model to prune
         pruning_type: Type of pruning to apply ("MLP_GLU" or "DEPTH")
-        neuron_selection_method: Method to calculate neuron importance ("MAW", "VOW", or "PON") - for MLP_GLU only
+        neuron_selection_method: Method to calculate neuron importance ("MAW", "VOW", "PON", or "L2") - for MLP_GLU only
         pruning_percentage: Percentage of neurons to prune (0-100) - for MLP_GLU only
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage) - for MLP_GLU only
         expansion_divisor: Optional divisor to round the intermediate layer size (32, 64, 128, 256, or None).

@@ -38,7 +38,7 @@ def prune_model(
     Args:
         model: Pre-trained model to prune
         pruning_type: Type of pruning to apply ("MLP_GLU" or "DEPTH")
-        neuron_selection_method: Method to calculate neuron importance ("MAW"/PPM, "VOW", or "PON") - for MLP_GLU only
+        neuron_selection_method: Method to calculate neuron importance ("MAW"/PPM, "VOW", "PON", or "L2") - for MLP_GLU only
         pruning_percentage: Percentage of neurons to prune (0-100) - for MLP_GLU only
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage) - for MLP_GLU only
         dataloader: Optional PyTorch DataLoader for data-driven pruning (MLP_GLU with MAW only).
@@ -49,7 +49,7 @@ def prune_model(
             from your target domain yield best results.
             
             **Compatibility:** Only works with neuron_selection_method='MAW' (PPM method).
-            Will raise ValueError if used with 'VOW' or 'PON'.
+            Will raise ValueError if used with 'VOW', 'PON', or 'L2'.
             
             **Example:**
                 >>> from torch.utils.data import DataLoader, TensorDataset
@@ -335,6 +335,18 @@ def compute_neuron_pair_importance_vow(gate_weight: torch.Tensor, up_weight: tor
 def compute_neuron_pair_importance_pon(gate_weight: torch.Tensor, up_weight: torch.Tensor) -> torch.Tensor:
     """
     Compute neuron pair importance scores using Product of Norms method.
+    
+    Args:
+        gate_weight: Weight matrix from the gate_proj layer
+        up_weight: Weight matrix from the up_proj layer
+        
+    Returns:
+        importance_scores: Importance scores for each neuron pair
+    """
+
+def compute_neuron_pair_importance_l2(gate_weight: torch.Tensor, up_weight: torch.Tensor) -> torch.Tensor:
+    """
+    Compute neuron pair importance scores using L2 norm method.
     
     Args:
         gate_weight: Weight matrix from the gate_proj layer

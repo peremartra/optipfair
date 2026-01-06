@@ -83,7 +83,7 @@ optipfair analyze --model-path meta-llama/Llama-3.2-1B
 
 ## Neuron Selection Methods
 
-OptiPFair supports three methods for calculating neuron importance:
+OptiPFair supports four methods for calculating neuron importance:
 
 ### PPM (Peak-to-Peak Magnitude)
 
@@ -96,6 +96,45 @@ pruned_model = prune_model(
     pruning_percentage=20
 )
 ```
+
+### VOW (Variance of Weights)
+
+The VOW method identifies neurons based on the variance of their weight values.
+
+```python
+pruned_model = prune_model(
+    model=model,
+    neuron_selection_method="VOW",
+    pruning_percentage=20
+)
+```
+
+### PON (Product of Norms)
+
+The PON method uses the product of L1 norms to identify important neurons.
+
+```python
+pruned_model = prune_model(
+    model=model,
+    neuron_selection_method="PON",
+    pruning_percentage=20
+)
+```
+
+### L2 (L2 Norm)
+
+The L2 method calculates neuron importance using L2 norms of weight values.
+
+```python
+pruned_model = prune_model(
+    model=model,
+    neuron_selection_method="L2",
+    pruning_percentage=20
+)
+```
+
+**Note:** Data-driven pruning (hybrid mode) is only available with the PPM method (`"MAW"`). VOW, PON, and L2 support static (weight-only) pruning only.
+
 ## Data-Driven Pruning (v0.2.0+)
 
 ### Overview

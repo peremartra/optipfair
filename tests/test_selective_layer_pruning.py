@@ -179,7 +179,7 @@ def test_selective_pruning_with_dataloader(model):
 
 def test_selective_pruning_all_methods(model):
     """Test selective pruning with all neuron selection methods."""
-    methods = ["MAW", "VOW", "PON"]
+    methods = ["MAW", "VOW", "PON", "L2"]
     layer_indices = [1, 5, 9]
     
     for method in methods:

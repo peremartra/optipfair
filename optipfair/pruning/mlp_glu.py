@@ -260,7 +260,23 @@ def compute_neuron_pair_importance_pon(gate_weight: torch.Tensor, up_weight: tor
     """
     gate_norms = torch.norm(gate_weight, p=1, dim=1)
     up_norms = torch.norm(up_weight, p=1, dim=1)
-    importance_scores = gate_norms * up_norms
+    importance_scores = gate_norms + up_norms
+    return importance_scores
+
+def compute_neuron_pair_importance_l2(gate_weight: torch.Tensor, up_weight: torch.Tensor) -> torch.Tensor:
+    """
+    Compute neuron pair importance scores using L2 norm method.
+
+    Args:
+        gate_weight: Weight matrix from the gate_proj layer
+        up_weight: Weight matrix from the up_proj layer
+        
+    Returns:
+        importance_scores: Importance scores for each neuron pair
+    """
+    gate_norms = torch.norm(gate_weight, p=2, dim=1)
+    up_norms = torch.norm(up_weight, p=2, dim=1)
+    importance_scores = gate_norms + up_norms
     return importance_scores
 
 def compute_neuron_pair_importance_maw_hybrid(
@@ -353,6 +369,7 @@ IMPORTANCE_FUNCTIONS = {
     "MAW": compute_neuron_pair_importance_maw,
     "VOW": compute_neuron_pair_importance_vow,
     "PON": compute_neuron_pair_importance_pon,
+    "L2": compute_neuron_pair_importance_l2,
 }
 
 def round_to_divisor(value: int, divisor: int) -> int:
@@ -500,7 +517,7 @@ def calculate_pruning_percentage_from_expansion_rate(
 
 def prune_model_mlp_glu(
     model: PreTrainedModel,
-    neuron_selection_method: str = "MAW",
+    neuron_selection_method: str = "PPM",
     pruning_percentage: Optional[float] = 10,
     expansion_rate: Optional[float] = None,
     expansion_divisor: Optional[int] = None,
@@ -520,7 +537,7 @@ def prune_model_mlp_glu(
     
     Args:
         model: Pre-trained model to prune
-        neuron_selection_method: Method to use for calculating neuron importance ("MAW"/PPM, "VOW", or "PON")
+        neuron_selection_method: Method to use for calculating neuron importance ("MAW"/PPM, "VOW", "PON", or "L2")
         pruning_percentage: Percentage of neurons to prune (0-100)
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage)
         expansion_divisor: Optional divisor (32, 64, 128, 256, or None) to round intermediate layer size.

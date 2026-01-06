@@ -223,7 +223,7 @@ optipfair prune \
 
 ### Neuron Selection Methods
 
-OptiPFair supports three methods for calculating neuron importance (used with MLP_GLU pruning only):
+OptiPFair supports four methods for calculating neuron importance (used with MLP_GLU pruning only):
 
 1. **PPM (Peak-to-Peak Magnitude)** - Default method that identifies neurons based on the peak-to-peak magnitude of weights (calculated as max + |min| for each neuron). This captures the full dynamic range of weight values and is most effective for GLU architectures. Parameter value: `"MAW"` (maintained for backward compatibility).
 
@@ -326,6 +326,22 @@ OptiPFair supports three methods for calculating neuron importance (used with ML
        pruning_percentage=20
    )
    ```
+
+4. **L2 (L2 Norm)** - Calculates neuron importance using L2 norms of weight values.
+
+   ```python
+    pruned_model = opf.prune_model(
+       model=model,
+       neuron_selection_method="L2",
+       pruning_percentage=20
+   )
+   ```
+
+**Key considerations for neuron selection methods:**
+- PPM/MAW is the default and most effective for GLU architectures
+- Data-driven pruning (hybrid mode) is **only compatible** with `neuron_selection_method="MAW"`
+- VOW, PON, and L2 support static (weight-only) pruning only
+- All methods can be combined with `expansion_divisor` and selective layer pruning (`layer_indices`)
 
 ### Selective Layer Width Pruning (NEW in v0.2.0)
 
