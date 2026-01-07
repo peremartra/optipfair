@@ -331,6 +331,134 @@ class TestDepthPruning(unittest.TestCase):
         # Should still work correctly
         self.assertEqual(len(self.model.model.layers), 9)
         self.assertEqual(self.model.config.num_hidden_layers, 9)
+    
+    def test_prune_model_depth_with_return_stats(self):
+        """Test depth pruning with return_stats=True - this was failing before."""
+        from optipfair import prune_model
+        
+        # Create a fresh model for this test
+        test_model = MockTransformerModel(num_layers=12, hidden_size=768)
+        original_layer_count = len(test_model.model.layers)
+        
+        # This should not raise ZeroDivisionError
+        pruned_model, stats = prune_model(
+            model=test_model,
+            pruning_type="DEPTH",
+            num_layers_to_remove=3,
+            layer_selection_method="last",
+            return_stats=True,
+            show_progress=False
+        )
+        
+        # Verify stats structure
+        self.assertIsInstance(stats, dict)
+        self.assertIn("original_parameters", stats)
+        self.assertIn("pruned_parameters", stats)
+        self.assertIn("reduction", stats)
+        self.assertIn("percentage_reduction", stats)
+        self.assertIn("original_layer_count", stats)
+        self.assertIn("final_layer_count", stats)
+        self.assertIn("layers_removed", stats)
+        self.assertIn("layer_reduction_percentage", stats)
+        
+        # Verify stat values
+        self.assertEqual(stats["original_layer_count"], 12)
+        self.assertEqual(stats["final_layer_count"], 9)
+        self.assertEqual(stats["layers_removed"], 3)
+        self.assertEqual(stats["layer_reduction_percentage"], 25.0)
+        self.assertGreater(stats["original_parameters"], 0)
+        self.assertGreater(stats["pruned_parameters"], 0)
+        self.assertLess(stats["pruned_parameters"], stats["original_parameters"])
+        self.assertGreater(stats["percentage_reduction"], 0)
+    
+    def test_prune_model_depth_stats_with_percentage(self):
+        """Test depth pruning statistics with depth_pruning_percentage."""
+        from optipfair import prune_model
+        
+        test_model = MockTransformerModel(num_layers=12, hidden_size=768)
+        
+        pruned_model, stats = prune_model(
+            model=test_model,
+            pruning_type="DEPTH",
+            depth_pruning_percentage=25.0,  # 25% of 12 = 3 layers
+            layer_selection_method="last",
+            return_stats=True,
+            show_progress=False
+        )
+        
+        # Verify stats
+        self.assertEqual(stats["original_layer_count"], 12)
+        self.assertEqual(stats["final_layer_count"], 9)
+        self.assertEqual(stats["layers_removed"], 3)
+        self.assertEqual(stats["layer_reduction_percentage"], 25.0)
+    
+    def test_prune_model_depth_stats_with_custom_indices(self):
+        """Test depth pruning statistics with custom layer indices."""
+        from optipfair import prune_model
+        
+        test_model = MockTransformerModel(num_layers=12, hidden_size=768)
+        custom_indices = [2, 5, 8]
+        
+        pruned_model, stats = prune_model(
+            model=test_model,
+            pruning_type="DEPTH",
+            layer_indices=custom_indices,
+            return_stats=True,
+            show_progress=False
+        )
+        
+        # Verify stats
+        self.assertEqual(stats["original_layer_count"], 12)
+        self.assertEqual(stats["final_layer_count"], 9)
+        self.assertEqual(stats["layers_removed"], 3)
+        self.assertEqual(stats["layer_reduction_percentage"], 25.0)
+    
+    def test_get_depth_pruning_statistics(self):
+        """Test the get_depth_pruning_statistics function directly."""
+        from optipfair.pruning.utils import get_depth_pruning_statistics, count_parameters, get_model_layers
+        
+        # Create models
+        original_model = MockTransformerModel(num_layers=12, hidden_size=768)
+        original_params = count_parameters(original_model)
+        original_layer_count = len(get_model_layers(original_model))
+        
+        # Prune without stats
+        pruned_model = prune_model_depth(
+            model=original_model,
+            num_layers_to_remove=3,
+            layer_selection_method="last",
+            show_progress=False
+        )
+        
+        layers_removed = original_layer_count - len(get_model_layers(pruned_model))
+        
+        # Call the stats function directly
+        stats = get_depth_pruning_statistics(
+            original_params=original_params,
+            original_layer_count=original_layer_count,
+            pruned_model=pruned_model,
+            layers_removed=layers_removed,
+        )
+        
+        # Verify all required keys are present
+        required_keys = {
+            "original_parameters",
+            "pruned_parameters",
+            "reduction",
+            "percentage_reduction",
+            "original_layer_count",
+            "final_layer_count",
+            "layers_removed",
+            "layer_reduction_percentage",
+        }
+        self.assertEqual(set(stats.keys()), required_keys)
+        
+        # Verify calculations
+        self.assertEqual(stats["original_layer_count"], 12)
+        self.assertEqual(stats["final_layer_count"], 9)
+        self.assertEqual(stats["layers_removed"], 3)
+        self.assertEqual(stats["percentage_reduction"], 
+                        (stats["reduction"] / stats["original_parameters"]) * 100)
 
 
 if __name__ == '__main__':

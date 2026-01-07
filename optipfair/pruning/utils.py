@@ -112,14 +112,30 @@ def get_pruning_statistics(
     pruned_model: torch.nn.Module,
 ) -> Dict[str, Any]:
     """
-    Calculate statistics about the pruning operation.
+    Calculate statistics about the pruning operation for width pruning (MLP_GLU).
+    
+    This function is designed for width pruning operations where neurons/channels
+    are pruned from existing layers. For depth pruning (layer removal), use
+    get_depth_pruning_statistics() instead, which avoids deepcopy limitations.
     
     Args:
-        original_model: Original model before pruning
+        original_model: Original model before pruning (typically a deepcopy)
         pruned_model: Model after pruning
         
     Returns:
-        Dictionary containing pruning statistics
+        Dictionary containing pruning statistics with keys:
+            - original_parameters: Parameter count before pruning
+            - pruned_parameters: Parameter count after pruning
+            - reduction: Absolute reduction in parameters
+            - percentage_reduction: Percentage reduction in parameters
+            - expansion_rate: Expansion rate percentage (for MLP_GLU)
+            - pruned_layers: Number of layers where pruning was applied (optional)
+            - total_layers: Total number of layers (optional)
+            
+    Note:
+        This function requires a deepcopy of the original model, which can be
+        problematic for certain architectures. For depth pruning operations,
+        use get_depth_pruning_statistics() instead.
     """
     original_params = count_parameters(original_model)
     pruned_params = count_parameters(pruned_model)
@@ -175,5 +191,59 @@ def get_pruning_statistics(
     if pruned_layer_count is not None and total_layer_count is not None:
         stats["pruned_layers"] = pruned_layer_count
         stats["total_layers"] = total_layer_count
+    
+    return stats
+
+
+def get_depth_pruning_statistics(
+    original_params: int,
+    original_layer_count: int,
+    pruned_model: torch.nn.Module,
+    layers_removed: int,
+) -> Dict[str, Any]:
+    """
+    Calculate statistics for depth pruning operations.
+    
+    This function is specifically designed for depth pruning, where entire layers
+    are removed from the model. Unlike get_pruning_statistics(), this function
+    does not require the original model to be passed (which avoids deepcopy issues
+    with PyTorch ModuleLists in certain architectures).
+    
+    Args:
+        original_params: Parameter count before pruning
+        original_layer_count: Number of layers before pruning
+        pruned_model: Model after depth pruning
+        layers_removed: Number of layers that were removed
+        
+    Returns:
+        Dictionary containing depth pruning statistics with keys:
+            - original_parameters: Parameter count before pruning
+            - pruned_parameters: Parameter count after pruning
+            - reduction: Absolute reduction in parameters
+            - percentage_reduction: Percentage reduction in parameters
+            - original_layer_count: Number of layers before pruning
+            - final_layer_count: Number of layers after pruning
+            - layers_removed: Number of layers removed
+            - layer_reduction_percentage: Percentage of layers removed
+    """
+    pruned_params = count_parameters(pruned_model)
+    pruned_layers = get_model_layers(pruned_model)
+    final_layer_count = len(pruned_layers) if pruned_layers else 0
+    
+    # Calculate reduction statistics
+    reduction = original_params - pruned_params
+    percentage_reduction = (reduction / original_params) * 100 if original_params > 0 else 0.0
+    layer_reduction_percentage = (layers_removed / original_layer_count) * 100 if original_layer_count > 0 else 0.0
+    
+    stats = {
+        "original_parameters": original_params,
+        "pruned_parameters": pruned_params,
+        "reduction": reduction,
+        "percentage_reduction": percentage_reduction,
+        "original_layer_count": original_layer_count,
+        "final_layer_count": final_layer_count,
+        "layers_removed": layers_removed,
+        "layer_reduction_percentage": layer_reduction_percentage,
+    }
     
     return stats
