@@ -164,6 +164,45 @@ print(f"Reduction: {stats['reduction']:,} parameters ({stats['percentage_reducti
 pruned_model.save_pretrained("./pruned-model")
 ```
 
+#### Depth Pruning Statistics (return_stats=True)
+
+When using depth pruning with `return_stats=True`, the `stats` dictionary contains depth-specific metrics:
+
+```python
+pruned_model, stats = opf.prune_model(
+    model=model,
+    pruning_type="DEPTH",
+    num_layers_to_remove=3,           # or depth_pruning_percentage / layer_indices
+    layer_selection_method="last",   # "last" (default), "first", or "custom"
+    return_stats=True,
+)
+
+print({k: stats[k] for k in [
+    'original_parameters',
+    'pruned_parameters',
+    'reduction',
+    'percentage_reduction',
+    'original_layer_count',
+    'final_layer_count',
+    'layers_removed',
+    'layer_reduction_percentage',
+]})
+# Example
+# {
+#   'original_parameters': 85_054_464,
+#   'pruned_parameters': 63_790_848,
+#   'reduction': 21_263_616,
+#   'percentage_reduction': 25.0,
+#   'original_layer_count': 12,
+#   'final_layer_count': 9,
+#   'layers_removed': 3,
+#   'layer_reduction_percentage': 25.0,
+# }
+```
+
+- Not included: `expansion_rate` (only applies to MLP/GLU width pruning).
+- Notes: Stats are computed using the pre-pruning state to avoid deepcopy issues with certain architectures.
+
 #### Command-Line Interface for Pruning
 
 ```bash

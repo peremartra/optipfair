@@ -401,6 +401,35 @@ This approach is often more intuitive when comparing across different model scal
 
 ## Depth Pruning
 
+Depth pruning removes entire transformer layers. When calling `prune_model(..., pruning_type="DEPTH", return_stats=True)`, the returned `stats` dictionary includes depth-specific fields:
+
+```python
+pruned_model, stats = prune_model(
+    model=model,
+    pruning_type="DEPTH",
+    num_layers_to_remove=3,          # or depth_pruning_percentage / layer_indices
+    layer_selection_method="last",  # "last" (default), "first", or "custom"
+    return_stats=True,
+)
+
+print(stats)
+# {
+#   'original_parameters': int,           # Parameter count before pruning
+#   'pruned_parameters': int,             # Parameter count after pruning
+#   'reduction': int,                     # Absolute reduction in parameters
+#   'percentage_reduction': float,        # Percentage reduction of parameters
+#   'original_layer_count': int,          # Layers before pruning
+#   'final_layer_count': int,             # Layers after pruning
+#   'layers_removed': int,                # Number of removed layers
+#   'layer_reduction_percentage': float   # Percentage of layers removed
+# }
+```
+
+- Depth pruning stats do not include `expansion_rate` (only relevant for MLP/GLU width pruning).
+- Internally, stats are captured before modifying the model to ensure correctness and avoid deepcopy issues.
+
+## Depth Pruning
+
 OptiPFair also supports depth pruning, which removes entire transformer layers from models. This is more aggressive than neuron-level pruning but can lead to significant efficiency gains.
 
 ### Python API
