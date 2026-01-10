@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+---
+
+## [0.2.4] - 2026-01-10
+
+### 🎉 New Features
+
+#### Universal DataLoader Format Support for `analyze_layer_importance`
+- **Multi-Format Batch Handling**: `analyze_layer_importance` now automatically detects and handles multiple DataLoader batch formats without requiring HuggingFace dataset utilities
+- **Supported Formats**:
+  - **Dictionary**: HuggingFace-style `{'input_ids': tensor, 'attention_mask': tensor}`
+  - **Tuple/List**: PyTorch `TensorDataset` format `(input_ids, attention_mask, ...)`
+  - **Single Tensor**: Direct tensor input treated as `input_ids`
+- **Positional Mapping**: Tuple/list elements automatically map to standard transformer arguments: `[0]=input_ids`, `[1]=attention_mask`, `[2]=token_type_ids`, etc.
+- **Internal Utility**: New `_prepare_batch_inputs()` function normalizes all formats transparently
+- **Debug Logging**: Optional DEBUG-level logging shows format detection and positional mapping
+- **Zero Breaking Changes**: Existing code with dict-based DataLoaders works exactly as before
+
+**Closes Issues**: #12, #17, #18
+
 ### 📝 Documentation Updates
 
 #### Terminology Update: MAW → PPM
@@ -7,7 +26,40 @@
 - **Backward Compatibility**: The parameter value `"MAW"` is maintained for full backward compatibility and maps to the PPM method.
 - **Research Foundation**: PPM is formally described in: *Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671*
 - **Updated Documentation**: All documentation files now reference PPM as the primary name with MAW noted as the legacy parameter value.
-- **No Breaking Changes**: No code changes required; all existing code using `neuron_selection_method="MAW"` continues to work exactly as before.
+
+#### Clarification: L2 Norm Neuron Selection Method
+- **Existing Feature**: The L2 norm method (`neuron_selection_method="L2"`) has been available since early versions
+- **How It Works**: Calculates neuron importance using L2 (Euclidean) norms of weight values: `||gate_weight||₂ + ||up_weight||₂`
+- **Static Only**: Supports **weight-only (static) pruning** exclusively - not compatible with data-driven mode (dataloader)
+- **Documentation Enhancement**: Added explicit warnings in usage guides about L2 limitations vs PPM/MAW data-driven capabilities
+
+### 🧪 Testing
+
+#### Comprehensive Test Coverage for Batch Format Support
+- **Unit Tests**: 11 new tests for `_prepare_batch_inputs()` covering all format variations
+- **Integration Tests**: 5 new tests for `analyze_layer_importance()` with different DataLoader types
+- **Test Coverage**: Dict batches, 2-element tuples, 3+ element tuples, lists, single tensors, None handling, device placement
+- **All Tests Pass**: 16 new tests + 95 existing tests = 111 total passing tests
+
+### 🔧 Technical Details
+
+#### Implementation
+- **File**: `optipfair/pruning/utils.py`
+- **New Function**: `_prepare_batch_inputs(batch, device)` - internal utility with underscore prefix
+- **Modified Function**: `analyze_layer_importance()` in `optipfair/pruning/depth.py` now uses normalized batch handling
+- **Device Handling**: All tensors automatically moved to model device regardless of input format
+- **Error Handling**: Clear ValueError with format hints for unsupported batch types
+
+#### Enhanced Examples
+- **layer_importance_analysis.ipynb**: Added section demonstrating TensorDataset (tuple format) usage
+- **docs/usage.md**: New examples showing analyze_layer_importance with various DataLoader formats
+
+### 🔒 Compatibility
+
+- **Fully Backward Compatible**: All existing code continues to work without modification
+- **No API Changes**: Function signatures unchanged, new functionality is transparent
+- **Python**: Requires Python >=3.8 (unchanged)
+- **Dependencies**: No new dependencies added
 
 ---
 

@@ -654,3 +654,87 @@ pruned_model = prune_model(
     layer_indices=layers_to_remove
 )
 ```
+
+### DataLoader Format Support (v0.2.4+)
+
+Starting from OptiPFair v0.2.4, `analyze_layer_importance` automatically handles multiple DataLoader batch formats, making it compatible with both HuggingFace datasets and native PyTorch structures.
+
+#### Supported Batch Formats
+
+**1. Dictionary Format (HuggingFace)**
+
+```python
+from datasets import load_dataset
+from torch.utils.data import DataLoader
+
+# HuggingFace datasets return dict batches
+dataset = load_dataset('wikitext', 'wikitext-2-raw-v1', split='train[:100]')
+tokenized = dataset.map(tokenize_function, batched=True)
+tokenized.set_format(type='torch', columns=['input_ids', 'attention_mask'])
+dataloader = DataLoader(tokenized, batch_size=8)
+
+# Batch format: {'input_ids': tensor, 'attention_mask': tensor}
+importance_scores = analyze_layer_importance(model, dataloader)
+```
+
+**2. Tuple Format (TensorDataset)**
+
+```python
+from torch.utils.data import DataLoader, TensorDataset
+
+# Tokenize texts manually
+inputs = tokenizer(
+    texts,
+    truncation=True,
+    padding='max_length',
+    max_length=512,
+    return_tensors='pt'
+)
+
+# TensorDataset returns tuples
+dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
+dataloader = DataLoader(dataset, batch_size=8)
+
+# Batch format: (input_ids, attention_mask)
+# Automatically mapped: [0]=input_ids, [1]=attention_mask
+importance_scores = analyze_layer_importance(model, dataloader)
+```
+
+**3. List Format (Custom Datasets)**
+
+```python
+class CustomDataset(Dataset):
+    def __getitem__(self, idx):
+        return [self.input_ids[idx], self.attention_mask[idx]]
+
+# Batch format: [input_ids, attention_mask]
+# Same positional mapping as tuples
+importance_scores = analyze_layer_importance(model, dataloader)
+```
+
+**4. Single Tensor Format**
+
+```python
+# Dataset with only input_ids (no attention_mask)
+dataset = TensorDataset(input_ids_tensor)
+dataloader = DataLoader(dataset, batch_size=8)
+
+# Batch format: single tensor
+# Automatically treated as input_ids
+importance_scores = analyze_layer_importance(model, dataloader)
+```
+
+#### Positional Mapping for Tuple/List Formats
+
+When using tuple or list batches, elements are automatically mapped to standard transformer arguments:
+
+- `[0]` → `input_ids` (required)
+- `[1]` → `attention_mask` (optional)
+- `[2]` → `token_type_ids` (optional)
+- `[3]` → `position_ids` (optional)
+- `[4]` → `head_mask` (optional)
+- `[5]` → `inputs_embeds` (optional)
+
+**Note**: All formats are fully backward compatible. Existing code continues to work without modifications.
+
+---
