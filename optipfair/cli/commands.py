@@ -24,7 +24,7 @@ def cli():
 @click.option('--model-path', required=True, help='Path or identifier of the model to prune.')
 @click.option('--pruning-type', default='MLP_GLU', type=click.Choice(['MLP_GLU', 'DEPTH']), 
               help='Type of pruning to apply.')
-@click.option('--method', default='MAW', type=click.Choice(['MAW', 'VOW', 'PON']), 
+@click.option('--method', default='MAW', type=click.Choice(['MAW', 'VOW', 'PON', 'L2']), 
               help='Method to calculate neuron importance (MLP_GLU only).')
 @click.option('--pruning-percentage', default=None, type=float, 
               help='Percentage of neurons/layers to prune (0-100).')

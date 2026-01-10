@@ -15,6 +15,7 @@ from optipfair.pruning.mlp_glu import (
     compute_neuron_pair_importance_maw,
     compute_neuron_pair_importance_vow,
     compute_neuron_pair_importance_pon,
+    compute_neuron_pair_importance_l2,
     prune_neuron_pairs,
     calculate_pruning_percentage_from_expansion_rate,
 )
@@ -81,6 +82,19 @@ class TestMLPGLUPruning(unittest.TestCase):
         self.assertEqual(importance.shape[0], self.intermediate_size)
         
         # Check that all values are positive or zero (L1 norm is non-negative)
+        self.assertTrue(torch.all(importance >= 0))
+        
+        # Check that it doesn't return all zeros
+        self.assertFalse(torch.all(importance == 0))
+    
+    def test_compute_neuron_pair_importance_l2(self):
+        """Test L2 importance calculation."""
+        importance = compute_neuron_pair_importance_l2(self.gate_weight, self.up_weight)
+        
+        # Check shape
+        self.assertEqual(importance.shape[0], self.intermediate_size)
+        
+        # Check that all values are positive or zero (L2 norm is non-negative)
         self.assertTrue(torch.all(importance >= 0))
         
         # Check that it doesn't return all zeros

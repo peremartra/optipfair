@@ -216,6 +216,21 @@ class TestExpansionDivisorWithMethods:
         
         assert pruned_model is not None
         assert stats['pruned_parameters'] < stats['original_parameters']
+    
+    def test_divisor_with_l2(self, small_model):
+        """Test expansion_divisor with L2 method"""
+        pruned_model, stats = prune_model(
+            model=small_model,
+            pruning_type="MLP_GLU",
+            neuron_selection_method="L2",
+            pruning_percentage=20,
+            expansion_divisor=256,
+            show_progress=False,
+            return_stats=True
+        )
+        
+        assert pruned_model is not None
+        assert stats['pruned_parameters'] < stats['original_parameters']
 
 
 class TestExpansionDivisorEdgeCases:

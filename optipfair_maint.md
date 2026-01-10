@@ -119,7 +119,7 @@ Familiarize yourself with the main components of the library:
 
 *   **Pruning (`optipfair/pruning/`)**:
     *   `mlp_glu_pruning.py`: Contains the core logic for applying structured pruning specifically to MLP layers in GLU architectures. This is where the model modification happens.
-    *   `methods.py`: Implements the different neuron importance calculation methods (MAW, VOW, PON). If adding a new method, this is the place.
+    *   `methods.py`: Implements the different neuron importance calculation methods (PPM/MAW, VOW, PON). If adding a new method, this is the place. Note: PPM (Peak-to-Peak Magnitude) is the formal name; \"MAW\" is maintained as parameter for backward compatibility.
     *   `utils.py`: Helper functions for pruning, like identifying GLU layers, calculating parameter counts, etc.
 *   **Bias Visualization (`optipfair/bias/`)**:
     *   `activations.py`: Handles the complex task of setting up PyTorch hooks to capture intermediate layer activations. Modifying this requires careful understanding of PyTorch hooks and Transformer model internals.

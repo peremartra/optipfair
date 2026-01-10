@@ -26,11 +26,13 @@ Understanding bias in language models is crucial for:
 - **Layer Importance Analysis**: Analyze transformer layers using cosine similarity to inform pruning decisions
 - **Bias Visualization Tools**: Comprehensive analysis of how models process demographic attributes
 - **Quantitative Bias Metrics**: Numeric measurements for consistent evaluation
-- **Multiple Neuron Selection Methods**: MAW, VOW, and PON for different pruning strategies
+- **Multiple Neuron Selection Methods**: PPM (Peak-to-Peak Magnitude), VOW, and PON for different pruning strategies
 - **Flexible Pruning Targets**: Support for both pruning percentage and target expansion rate
 - **Layer Selection Methods**: Choose specific layers or use automatic selection strategies
 - **Simple API and CLI**: Easy to use interfaces for Python and command line
 - **Progress Tracking**: Visual progress bars and detailed statistics
+
+**Note:** The default neuron selection method is PPM (Peak-to-Peak Magnitude), formally described in: *Martra, P. (2025). Fragile Knowledge, Robust Instruction-Following: The Width Pruning Dichotomy in Llama-3.2. ArXiv. https://arxiv.org/abs/2512.22671*. For backward compatibility, the parameter value `"MAW"` is still accepted.
 
 ## Getting Started
 

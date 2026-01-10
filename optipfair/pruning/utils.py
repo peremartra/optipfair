@@ -112,14 +112,30 @@ def get_pruning_statistics(
     pruned_model: torch.nn.Module,
 ) -> Dict[str, Any]:
     """
-    Calculate statistics about the pruning operation.
+    Calculate statistics about the pruning operation for width pruning (MLP_GLU).
+    
+    This function is designed for width pruning operations where neurons/channels
+    are pruned from existing layers. For depth pruning (layer removal), use
+    get_depth_pruning_statistics() instead, which avoids deepcopy limitations.
     
     Args:
-        original_model: Original model before pruning
+        original_model: Original model before pruning (typically a deepcopy)
         pruned_model: Model after pruning
         
     Returns:
-        Dictionary containing pruning statistics
+        Dictionary containing pruning statistics with keys:
+            - original_parameters: Parameter count before pruning
+            - pruned_parameters: Parameter count after pruning
+            - reduction: Absolute reduction in parameters
+            - percentage_reduction: Percentage reduction in parameters
+            - expansion_rate: Expansion rate percentage (for MLP_GLU)
+            - pruned_layers: Number of layers where pruning was applied (optional)
+            - total_layers: Total number of layers (optional)
+            
+    Note:
+        This function requires a deepcopy of the original model, which can be
+        problematic for certain architectures. For depth pruning operations,
+        use get_depth_pruning_statistics() instead.
     """
     original_params = count_parameters(original_model)
     pruned_params = count_parameters(pruned_model)
@@ -177,3 +193,149 @@ def get_pruning_statistics(
         stats["total_layers"] = total_layer_count
     
     return stats
+
+
+def get_depth_pruning_statistics(
+    original_params: int,
+    original_layer_count: int,
+    pruned_model: torch.nn.Module,
+    layers_removed: int,
+) -> Dict[str, Any]:
+    """
+    Calculate statistics for depth pruning operations.
+    
+    This function is specifically designed for depth pruning, where entire layers
+    are removed from the model. Unlike get_pruning_statistics(), this function
+    does not require the original model to be passed (which avoids deepcopy issues
+    with PyTorch ModuleLists in certain architectures).
+    
+    Args:
+        original_params: Parameter count before pruning
+        original_layer_count: Number of layers before pruning
+        pruned_model: Model after depth pruning
+        layers_removed: Number of layers that were removed
+        
+    Returns:
+        Dictionary containing depth pruning statistics with keys:
+            - original_parameters: Parameter count before pruning
+            - pruned_parameters: Parameter count after pruning
+            - reduction: Absolute reduction in parameters
+            - percentage_reduction: Percentage reduction in parameters
+            - original_layer_count: Number of layers before pruning
+            - final_layer_count: Number of layers after pruning
+            - layers_removed: Number of layers removed
+            - layer_reduction_percentage: Percentage of layers removed
+    """
+    pruned_params = count_parameters(pruned_model)
+    pruned_layers = get_model_layers(pruned_model)
+    final_layer_count = len(pruned_layers) if pruned_layers else 0
+    
+    # Calculate reduction statistics
+    reduction = original_params - pruned_params
+    percentage_reduction = (reduction / original_params) * 100 if original_params > 0 else 0.0
+    layer_reduction_percentage = (layers_removed / original_layer_count) * 100 if original_layer_count > 0 else 0.0
+    
+    stats = {
+        "original_parameters": original_params,
+        "pruned_parameters": pruned_params,
+        "reduction": reduction,
+        "percentage_reduction": percentage_reduction,
+        "original_layer_count": original_layer_count,
+        "final_layer_count": final_layer_count,
+        "layers_removed": layers_removed,
+        "layer_reduction_percentage": layer_reduction_percentage,
+    }
+    
+    return stats
+
+
+def _prepare_batch_inputs(batch: Any, device: torch.device) -> Dict[str, torch.Tensor]:
+    """
+    Normalize batch data from various DataLoader formats to a unified dict format.
+    
+    This internal utility supports multiple input formats commonly used with
+    transformer models, converting them to a consistent dictionary format
+    suitable for model forward passes.
+    
+    Supported formats:
+        - torch.Tensor: Treated as input_ids only
+        - dict: Keys extracted directly (e.g., {'input_ids': ..., 'attention_mask': ...})
+        - list/tuple: Positional mapping following transformer convention:
+            [0] -> input_ids
+            [1] -> attention_mask  
+            [2] -> token_type_ids
+            [3] -> position_ids
+            [4] -> head_mask
+            [5] -> inputs_embeds
+    
+    Args:
+        batch: Batch data from a DataLoader. Can be a tensor, dict, list, or tuple.
+        device: Target device to move tensors to.
+        
+    Returns:
+        Dict[str, torch.Tensor]: Normalized inputs ready for model(**inputs).
+        
+    Raises:
+        ValueError: If batch format is not supported.
+        
+    Note:
+        This is an internal utility function (prefixed with _) and not part
+        of the public API. It may change without notice.
+    """
+    # Standard transformer argument order for positional mapping
+    POSITIONAL_KEYS = [
+        'input_ids',
+        'attention_mask', 
+        'token_type_ids',
+        'position_ids',
+        'head_mask',
+        'inputs_embeds',
+    ]
+    
+    inputs: Dict[str, torch.Tensor] = {}
+    
+    # Case 1: Single tensor - treat as input_ids
+    if isinstance(batch, torch.Tensor):
+        logger.debug("Single tensor batch detected, treating as input_ids")
+        inputs['input_ids'] = batch.to(device)
+        return inputs
+    
+    # Case 2: Dictionary - extract keys directly
+    if isinstance(batch, dict):
+        for k, v in batch.items():
+            if isinstance(v, torch.Tensor):
+                inputs[k] = v.to(device)
+            elif v is not None:
+                inputs[k] = v
+        return inputs
+    
+    # Case 3: List or tuple - positional mapping
+    if isinstance(batch, (list, tuple)):
+        mapped_keys = []
+        for idx, value in enumerate(batch):
+            if idx >= len(POSITIONAL_KEYS):
+                logger.debug(
+                    f"Batch has more elements ({len(batch)}) than standard keys "
+                    f"({len(POSITIONAL_KEYS)}), ignoring extra elements"
+                )
+                break
+            
+            if value is None:
+                continue
+                
+            key = POSITIONAL_KEYS[idx]
+            if isinstance(value, torch.Tensor):
+                inputs[key] = value.to(device)
+                mapped_keys.append(key)
+            else:
+                inputs[key] = value
+                mapped_keys.append(key)
+        
+        logger.debug(f"Positional mapping applied: {mapped_keys}")
+        return inputs
+    
+    # Unsupported format
+    raise ValueError(
+        f"Unsupported batch format: {type(batch).__name__}. "
+        f"Expected torch.Tensor, dict, list, or tuple."
+    )

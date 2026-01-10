@@ -14,7 +14,7 @@ from typing import List, Optional, Union, Tuple, Dict, Any
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
-from .utils import get_model_layers, count_parameters
+from .utils import get_model_layers, count_parameters, _prepare_batch_inputs
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def validate_layer_removal_params(
         num_layers_to_remove: Number of layers to remove
         layer_indices: Specific layer indices to remove
         depth_pruning_percentage: Percentage of layers to remove
-        layer_selection_method: Method for selecting layers ("last", "custom")
+        layer_selection_method: Method for selecting layers ("last", "first", "custom")
         
     Returns:
         Dictionary with validated parameters and model info
@@ -63,7 +63,7 @@ def validate_layer_removal_params(
         raise ValueError("Parameters num_layers_to_remove, layer_indices, and depth_pruning_percentage are mutually exclusive")
     
     # Validate layer_selection_method
-    valid_methods = ["last", "custom"]
+    valid_methods = ["last", "first", "custom"]
     if layer_selection_method not in valid_methods:
         raise ValueError(f"layer_selection_method must be one of {valid_methods}, got {layer_selection_method}")
     
@@ -123,7 +123,7 @@ def select_layers_to_remove(
     Args:
         total_layers: Total number of layers in the model
         num_layers_to_remove: Number of layers to remove
-        layer_selection_method: Method for selection ("last", "custom")
+        layer_selection_method: Method for selection ("last", "first", "custom")
         custom_indices: Specific indices when method is "custom"
         
     Returns:
@@ -135,6 +135,10 @@ def select_layers_to_remove(
     if layer_selection_method == "last":
         # Remove the last N layers (typically best for maintaining model performance)
         return list(range(total_layers - num_layers_to_remove, total_layers))
+    
+    elif layer_selection_method == "first":
+        # Remove the first N layers
+        return list(range(0, num_layers_to_remove))
     
     elif layer_selection_method == "custom":
         if custom_indices is None:
@@ -555,8 +559,8 @@ def analyze_layer_importance(model, dataloader, layers_path=None, show_progress=
         
         with torch.no_grad():
             for batch_idx, batch in enumerate(iterator):
-                # Move batch to model device
-                inputs = {k: v.to(device) for k, v in batch.items()}
+                # Normalize batch format (supports dict, tuple/list, or single tensor)
+                inputs = _prepare_batch_inputs(batch, device)
                 
                 # Forward pass to trigger hooks
                 model(**inputs)
