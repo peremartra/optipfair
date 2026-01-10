@@ -16,7 +16,8 @@ from optipfair.pruning.utils import (
     validate_model_for_glu_pruning,
     get_model_layers,
     count_parameters,
-    get_pruning_statistics
+    get_pruning_statistics,
+    _prepare_batch_inputs
 )
 
 class MockLinear(nn.Linear):
@@ -181,6 +182,138 @@ class TestUtils(unittest.TestCase):
             self.assertEqual(stats["reduction"], 14_155_776)
             self.assertEqual(stats["percentage_reduction"], 50.0)
             self.assertEqual(stats["expansion_rate"], 200.0)  # 1536/768 * 100 = 200%
+
+
+class TestPrepareBatchInputs(unittest.TestCase):
+    """Test cases for _prepare_batch_inputs utility function."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.device = torch.device('cpu')
+        self.input_ids = torch.tensor([[1, 2, 3], [4, 5, 6]])
+        self.attention_mask = torch.tensor([[1, 1, 1], [1, 1, 0]])
+        self.token_type_ids = torch.tensor([[0, 0, 0], [0, 0, 0]])
+    
+    def test_single_tensor_as_input_ids(self):
+        """Test that a single tensor is treated as input_ids."""
+        result = _prepare_batch_inputs(self.input_ids, self.device)
+        
+        self.assertIn('input_ids', result)
+        self.assertEqual(len(result), 1)
+        self.assertTrue(torch.equal(result['input_ids'], self.input_ids))
+    
+    def test_dict_batch(self):
+        """Test that dict batches are handled correctly."""
+        batch = {
+            'input_ids': self.input_ids,
+            'attention_mask': self.attention_mask,
+        }
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertIn('input_ids', result)
+        self.assertIn('attention_mask', result)
+        self.assertTrue(torch.equal(result['input_ids'], self.input_ids))
+        self.assertTrue(torch.equal(result['attention_mask'], self.attention_mask))
+    
+    def test_dict_batch_with_extra_keys(self):
+        """Test that dict batches preserve extra keys."""
+        batch = {
+            'input_ids': self.input_ids,
+            'attention_mask': self.attention_mask,
+            'labels': torch.tensor([[2, 3, 4], [5, 6, 7]]),
+        }
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertIn('input_ids', result)
+        self.assertIn('attention_mask', result)
+        self.assertIn('labels', result)
+    
+    def test_tuple_batch_two_elements(self):
+        """Test tuple batch with input_ids and attention_mask."""
+        batch = (self.input_ids, self.attention_mask)
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertIn('input_ids', result)
+        self.assertIn('attention_mask', result)
+        self.assertTrue(torch.equal(result['input_ids'], self.input_ids))
+        self.assertTrue(torch.equal(result['attention_mask'], self.attention_mask))
+    
+    def test_list_batch_two_elements(self):
+        """Test list batch with input_ids and attention_mask."""
+        batch = [self.input_ids, self.attention_mask]
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertIn('input_ids', result)
+        self.assertIn('attention_mask', result)
+        self.assertTrue(torch.equal(result['input_ids'], self.input_ids))
+        self.assertTrue(torch.equal(result['attention_mask'], self.attention_mask))
+    
+    def test_tuple_batch_three_elements(self):
+        """Test tuple batch with input_ids, attention_mask, and token_type_ids."""
+        batch = (self.input_ids, self.attention_mask, self.token_type_ids)
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertIn('input_ids', result)
+        self.assertIn('attention_mask', result)
+        self.assertIn('token_type_ids', result)
+        self.assertTrue(torch.equal(result['input_ids'], self.input_ids))
+        self.assertTrue(torch.equal(result['attention_mask'], self.attention_mask))
+        self.assertTrue(torch.equal(result['token_type_ids'], self.token_type_ids))
+    
+    def test_tuple_batch_with_none_values(self):
+        """Test tuple batch with None values are skipped."""
+        batch = (self.input_ids, None, self.token_type_ids)
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertIn('input_ids', result)
+        self.assertNotIn('attention_mask', result)
+        self.assertIn('token_type_ids', result)
+    
+    def test_tuple_batch_single_element(self):
+        """Test tuple batch with only input_ids."""
+        batch = (self.input_ids,)
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertIn('input_ids', result)
+        self.assertEqual(len(result), 1)
+    
+    def test_unsupported_format_raises_error(self):
+        """Test that unsupported formats raise ValueError."""
+        with self.assertRaises(ValueError) as context:
+            _prepare_batch_inputs("invalid_batch", self.device)
+        
+        self.assertIn("Unsupported batch format", str(context.exception))
+        self.assertIn("str", str(context.exception))
+    
+    def test_tensors_moved_to_device(self):
+        """Test that tensors are moved to the specified device."""
+        batch = {'input_ids': self.input_ids, 'attention_mask': self.attention_mask}
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertEqual(result['input_ids'].device, self.device)
+        self.assertEqual(result['attention_mask'].device, self.device)
+    
+    def test_dict_with_none_values(self):
+        """Test that dict with None values handles them correctly."""
+        batch = {
+            'input_ids': self.input_ids,
+            'attention_mask': None,
+        }
+        
+        result = _prepare_batch_inputs(batch, self.device)
+        
+        self.assertIn('input_ids', result)
+        # None values should not be included since they're not tensors
+        self.assertNotIn('attention_mask', result)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -461,5 +461,182 @@ class TestDepthPruning(unittest.TestCase):
                         (stats["reduction"] / stats["original_parameters"]) * 100)
 
 
+class MockSimpleTransformer(nn.Module):
+    """Simple transformer model for analyze_layer_importance tests."""
+    
+    def __init__(self, num_layers=4, hidden_size=64):
+        super().__init__()
+        self.embedding = nn.Embedding(1000, hidden_size)
+        self.model = nn.Module()
+        self.model.layers = nn.ModuleList([
+            self._make_layer(hidden_size) for _ in range(num_layers)
+        ])
+        self.lm_head = nn.Linear(hidden_size, 1000)
+        
+    def _make_layer(self, hidden_size):
+        layer = nn.Module()
+        layer.self_attn = nn.MultiheadAttention(hidden_size, num_heads=4, batch_first=True)
+        layer.mlp = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size * 4),
+            nn.ReLU(),
+            nn.Linear(hidden_size * 4, hidden_size)
+        )
+        layer.layer_norm = nn.LayerNorm(hidden_size)
+        return layer
+    
+    def forward(self, input_ids, attention_mask=None, **kwargs):
+        x = self.embedding(input_ids)
+        for layer in self.model.layers:
+            # Self attention
+            attn_out, _ = layer.self_attn(x, x, x)
+            x = layer.layer_norm(x + attn_out)
+            # MLP
+            x = x + layer.mlp(x)
+        return self.lm_head(x)
+
+
+class TestAnalyzeLayerImportance(unittest.TestCase):
+    """Test cases for analyze_layer_importance with various batch formats."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        from optipfair.pruning.depth import analyze_layer_importance
+        self.analyze_layer_importance = analyze_layer_importance
+        self.model = MockSimpleTransformer(num_layers=4, hidden_size=64)
+        self.model.eval()
+        
+        # Sample data
+        self.input_ids = torch.randint(0, 1000, (8, 16))  # 8 samples, 16 tokens
+        self.attention_mask = torch.ones(8, 16, dtype=torch.long)
+        self.token_type_ids = torch.zeros(8, 16, dtype=torch.long)
+    
+    def test_dict_batch_format(self):
+        """Test analyze_layer_importance with dict batch format (HuggingFace style)."""
+        from torch.utils.data import DataLoader, Dataset
+        
+        class DictDataset(Dataset):
+            def __init__(self, input_ids, attention_mask):
+                self.input_ids = input_ids
+                self.attention_mask = attention_mask
+            
+            def __len__(self):
+                return len(self.input_ids)
+            
+            def __getitem__(self, idx):
+                return {
+                    'input_ids': self.input_ids[idx],
+                    'attention_mask': self.attention_mask[idx],
+                }
+        
+        dataset = DictDataset(self.input_ids, self.attention_mask)
+        dataloader = DataLoader(dataset, batch_size=4)
+        
+        result = self.analyze_layer_importance(
+            self.model, 
+            dataloader,
+            layers_path="model.layers",
+            show_progress=False
+        )
+        
+        # Should return importance scores for all 4 layers
+        self.assertEqual(len(result), 4)
+        self.assertTrue(all(isinstance(v, float) for v in result.values()))
+        self.assertTrue(all(0 <= v <= 1 for v in result.values()))
+    
+    def test_tuple_batch_format(self):
+        """Test analyze_layer_importance with tuple batch format (TensorDataset style)."""
+        from torch.utils.data import DataLoader, TensorDataset
+        
+        dataset = TensorDataset(self.input_ids, self.attention_mask)
+        dataloader = DataLoader(dataset, batch_size=4)
+        
+        result = self.analyze_layer_importance(
+            self.model, 
+            dataloader,
+            layers_path="model.layers",
+            show_progress=False
+        )
+        
+        # Should return importance scores for all 4 layers
+        self.assertEqual(len(result), 4)
+        self.assertTrue(all(isinstance(v, float) for v in result.values()))
+    
+    def test_tuple_batch_three_elements(self):
+        """Test analyze_layer_importance with 3-element tuple batch."""
+        from torch.utils.data import DataLoader, TensorDataset
+        
+        dataset = TensorDataset(
+            self.input_ids, 
+            self.attention_mask, 
+            self.token_type_ids
+        )
+        dataloader = DataLoader(dataset, batch_size=4)
+        
+        result = self.analyze_layer_importance(
+            self.model, 
+            dataloader,
+            layers_path="model.layers",
+            show_progress=False
+        )
+        
+        # Should return importance scores for all 4 layers
+        self.assertEqual(len(result), 4)
+        self.assertTrue(all(isinstance(v, float) for v in result.values()))
+    
+    def test_list_batch_format(self):
+        """Test analyze_layer_importance with list batch format."""
+        from torch.utils.data import DataLoader, Dataset
+        
+        class ListDataset(Dataset):
+            def __init__(self, input_ids, attention_mask):
+                self.input_ids = input_ids
+                self.attention_mask = attention_mask
+            
+            def __len__(self):
+                return len(self.input_ids)
+            
+            def __getitem__(self, idx):
+                return [self.input_ids[idx], self.attention_mask[idx]]
+        
+        # Need custom collate_fn to preserve list format
+        def list_collate(batch):
+            input_ids = torch.stack([item[0] for item in batch])
+            attention_mask = torch.stack([item[1] for item in batch])
+            return [input_ids, attention_mask]
+        
+        dataset = ListDataset(self.input_ids, self.attention_mask)
+        dataloader = DataLoader(dataset, batch_size=4, collate_fn=list_collate)
+        
+        result = self.analyze_layer_importance(
+            self.model, 
+            dataloader,
+            layers_path="model.layers",
+            show_progress=False
+        )
+        
+        # Should return importance scores for all 4 layers
+        self.assertEqual(len(result), 4)
+        self.assertTrue(all(isinstance(v, float) for v in result.values()))
+    
+    def test_single_tensor_batch_format(self):
+        """Test analyze_layer_importance with single tensor batch."""
+        from torch.utils.data import DataLoader, TensorDataset
+        
+        # Dataset with only input_ids (no attention_mask)
+        dataset = TensorDataset(self.input_ids)
+        dataloader = DataLoader(dataset, batch_size=4)
+        
+        result = self.analyze_layer_importance(
+            self.model, 
+            dataloader,
+            layers_path="model.layers",
+            show_progress=False
+        )
+        
+        # Should return importance scores for all 4 layers
+        self.assertEqual(len(result), 4)
+        self.assertTrue(all(isinstance(v, float) for v in result.values()))
+
+
 if __name__ == '__main__':
     unittest.main()

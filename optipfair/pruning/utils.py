@@ -247,3 +247,95 @@ def get_depth_pruning_statistics(
     }
     
     return stats
+
+
+def _prepare_batch_inputs(batch: Any, device: torch.device) -> Dict[str, torch.Tensor]:
+    """
+    Normalize batch data from various DataLoader formats to a unified dict format.
+    
+    This internal utility supports multiple input formats commonly used with
+    transformer models, converting them to a consistent dictionary format
+    suitable for model forward passes.
+    
+    Supported formats:
+        - torch.Tensor: Treated as input_ids only
+        - dict: Keys extracted directly (e.g., {'input_ids': ..., 'attention_mask': ...})
+        - list/tuple: Positional mapping following transformer convention:
+            [0] -> input_ids
+            [1] -> attention_mask  
+            [2] -> token_type_ids
+            [3] -> position_ids
+            [4] -> head_mask
+            [5] -> inputs_embeds
+    
+    Args:
+        batch: Batch data from a DataLoader. Can be a tensor, dict, list, or tuple.
+        device: Target device to move tensors to.
+        
+    Returns:
+        Dict[str, torch.Tensor]: Normalized inputs ready for model(**inputs).
+        
+    Raises:
+        ValueError: If batch format is not supported.
+        
+    Note:
+        This is an internal utility function (prefixed with _) and not part
+        of the public API. It may change without notice.
+    """
+    # Standard transformer argument order for positional mapping
+    POSITIONAL_KEYS = [
+        'input_ids',
+        'attention_mask', 
+        'token_type_ids',
+        'position_ids',
+        'head_mask',
+        'inputs_embeds',
+    ]
+    
+    inputs: Dict[str, torch.Tensor] = {}
+    
+    # Case 1: Single tensor - treat as input_ids
+    if isinstance(batch, torch.Tensor):
+        logger.debug("Single tensor batch detected, treating as input_ids")
+        inputs['input_ids'] = batch.to(device)
+        return inputs
+    
+    # Case 2: Dictionary - extract keys directly
+    if isinstance(batch, dict):
+        for k, v in batch.items():
+            if isinstance(v, torch.Tensor):
+                inputs[k] = v.to(device)
+            elif v is not None:
+                inputs[k] = v
+        return inputs
+    
+    # Case 3: List or tuple - positional mapping
+    if isinstance(batch, (list, tuple)):
+        mapped_keys = []
+        for idx, value in enumerate(batch):
+            if idx >= len(POSITIONAL_KEYS):
+                logger.debug(
+                    f"Batch has more elements ({len(batch)}) than standard keys "
+                    f"({len(POSITIONAL_KEYS)}), ignoring extra elements"
+                )
+                break
+            
+            if value is None:
+                continue
+                
+            key = POSITIONAL_KEYS[idx]
+            if isinstance(value, torch.Tensor):
+                inputs[key] = value.to(device)
+                mapped_keys.append(key)
+            else:
+                inputs[key] = value
+                mapped_keys.append(key)
+        
+        logger.debug(f"Positional mapping applied: {mapped_keys}")
+        return inputs
+    
+    # Unsupported format
+    raise ValueError(
+        f"Unsupported batch format: {type(batch).__name__}. "
+        f"Expected torch.Tensor, dict, list, or tuple."
+    )

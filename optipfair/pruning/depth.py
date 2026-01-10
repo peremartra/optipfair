@@ -14,7 +14,7 @@ from typing import List, Optional, Union, Tuple, Dict, Any
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
-from .utils import get_model_layers, count_parameters
+from .utils import get_model_layers, count_parameters, _prepare_batch_inputs
 
 logger = logging.getLogger(__name__)
 
@@ -559,8 +559,8 @@ def analyze_layer_importance(model, dataloader, layers_path=None, show_progress=
         
         with torch.no_grad():
             for batch_idx, batch in enumerate(iterator):
-                # Move batch to model device
-                inputs = {k: v.to(device) for k, v in batch.items()}
+                # Normalize batch format (supports dict, tuple/list, or single tensor)
+                inputs = _prepare_batch_inputs(batch, device)
                 
                 # Forward pass to trigger hooks
                 model(**inputs)
