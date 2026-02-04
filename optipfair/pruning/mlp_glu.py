@@ -260,7 +260,7 @@ def compute_neuron_pair_importance_pon(gate_weight: torch.Tensor, up_weight: tor
     """
     gate_norms = torch.norm(gate_weight, p=1, dim=1)
     up_norms = torch.norm(up_weight, p=1, dim=1)
-    importance_scores = gate_norms + up_norms
+    importance_scores = gate_norms * up_norms
     return importance_scores
 
 def compute_neuron_pair_importance_l2(gate_weight: torch.Tensor, up_weight: torch.Tensor) -> torch.Tensor:
