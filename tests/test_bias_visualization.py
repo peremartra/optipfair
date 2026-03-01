@@ -122,7 +122,7 @@ class TestBiasActivations(unittest.TestCase):
         """Test processing prompt and capturing activations."""
         with patch('optipfair.bias.activations.register_hooks') as mock_register:
             # Set up the mock to create a fake _optipfair_activations attribute
-            def side_effect(model):
+            def side_effect(model, target_layers=None):
                 model._optipfair_activations = {
                     "mlp_output_layer_0": torch.randn(1, 10, 128),
                     "attention_output_layer_0": torch.randn(1, 10, 128)
