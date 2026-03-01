@@ -288,7 +288,7 @@ def compute_neuron_pair_importance_maw_hybrid(
     """
     Compute neuron pair importance using a hybrid PPM + activations method.
 
-    This implementation combines:
+    This  combines:
     - Structural importance from weights (PPM-style range: max + |min|)
       for gate_proj, up_proj, and down_proj.
     - Dynamic importance from activation norms X_d_norm collected during calibration.

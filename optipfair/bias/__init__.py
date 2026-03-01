@@ -13,6 +13,11 @@ from .visualization import (
     visualize_pca,
 )
 from .metrics import calculate_bias_metrics
+from .activations import (
+    get_activation_pairs,
+    analyze_neuron_bias,
+    compute_fairness_pruning_scores,
+)
 
 __all__ = [
     "visualize_bias",
@@ -20,4 +25,7 @@ __all__ = [
     "visualize_heatmap",
     "visualize_pca",
     "calculate_bias_metrics",
+    "get_activation_pairs",
+    "analyze_neuron_bias",
+    "compute_fairness_pruning_scores",
 ]
