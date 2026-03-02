@@ -231,6 +231,123 @@ def calculate_bias_metrics(act1: Dict[str, torch.Tensor], act2: Dict[str, torch.
     """
 ```
 
+## Fairness-Aware Pruning Analysis (NEW in v0.3.0)
+
+### `analyze_neuron_bias`
+
+```python
+def analyze_neuron_bias(
+    model: PreTrainedModel,
+    tokenizer: Any,
+    prompt_pairs: List[Tuple[str, str]],
+    target_layers: List[str] = None,
+    aggregation: str = "mean",
+    batch_size: int = 4,
+    show_progress: bool = True,
+) -> Dict[str, torch.Tensor]:
+    """
+    Analyze bias contributions at the individual neuron level across multiple demographic prompt pairs.
+    
+    Computes per-neuron bias scores by comparing activations across prompt pairs that differ
+    only in demographic attributes. This enables identification of which specific neurons
+    contribute most to bias in the model.
+    
+    Args:
+        model: HuggingFace PreTrainedModel with GLU architecture (e.g., LLaMA, Mistral)
+        tokenizer: Matching tokenizer for encoding prompts
+        prompt_pairs: List of (prompt1, prompt2) tuples where each pair differs only in
+                      the demographic attribute being tested (e.g., gender, ethnicity)
+        target_layers: List of layer projection types to analyze. Options:
+                      ["gate_proj", "up_proj"] (both), or subsets
+                      Default: ["gate_proj", "up_proj"]
+        aggregation: How to aggregate bias across sequence positions:
+                    - "mean": Average bias across all tokens (default, more stable)
+                    - "max": Maximum bias across any token position (more sensitive)
+        batch_size: Batch size for processing prompt pairs. Adjust based on GPU memory.
+        show_progress: Whether to display progress bar
+        
+    Returns:
+        Dict[str, torch.Tensor]: Mapping of layer names to bias score tensors
+        Example: {"gate_proj_layer_5": tensor([...]), "up_proj_layer_5": tensor([...]), ...}
+        where each tensor has shape [intermediate_hidden_dim] with bias scores for each neuron
+        
+    Example:
+        >>> from optipfair.bias import analyze_neuron_bias
+        >>> import optipfair as opf
+        >>> 
+        >>> model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+        >>> tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+        >>> 
+        >>> prompt_pairs = [
+        ...     ("The male nurse helped the patient.", "The female nurse helped the patient."),
+        ...     ("White scientist discovered X.", "Black scientist discovered X."),
+        ... ]
+        >>> 
+        >>> bias_scores = analyze_neuron_bias(
+        ...     model=model,
+        ...     tokenizer=tokenizer,
+        ...     prompt_pairs=prompt_pairs,
+        ...     target_layers=["gate_proj", "up_proj"],
+        ...     aggregation="mean"
+        ... )
+    """
+```
+
+### `compute_fairness_pruning_scores`
+
+```python
+def compute_fairness_pruning_scores(
+    model: PreTrainedModel,
+    bias_scores: Dict[str, torch.Tensor],
+    bias_weight: float = 0.4,
+) -> Dict[int, torch.Tensor]:
+    """
+    Compute fairness-aware pruning scores by combining bias and importance metrics.
+    
+    Creates balanced pruning scores that account for both:
+    1. **Bias**: Neurons with high bias should be preserved (not pruned)
+    2. **Importance**: Neurons that are unimportant should be pruned
+    
+    The resulting scores indicate which neurons are "safe" to prune:
+    High scores = low bias + low importance = good to prune
+    Low scores = high bias or high importance = risky to prune
+    
+    Args:
+        model: HuggingFace PreTrainedModel with GLU architecture
+        bias_scores: Dictionary returned by analyze_neuron_bias()
+                    Format: Dict[str, torch.Tensor] with layer names as keys
+        bias_weight: Weight to balance fairness vs. performance (float, 0.0 to 1.0):
+                    - 0.0: Pure importance (standard pruning, ignore bias)
+                    - 0.4-0.5: Balanced (RECOMMENDED) - good compression + fairness
+                    - 0.7: Fairness-critical - prioritize reducing bias
+                    - 1.0: Pure bias (preserve important but biased neurons)
+        
+    Returns:
+        Dict[int, torch.Tensor]: Mapping of layer indices to fairness pruning scores
+        Example: {0: tensor([...]), 1: tensor([...]), ...}
+        where each tensor has shape [intermediate_hidden_dim]
+        
+    Raises:
+        ValueError: If bias_weight is not in [0.0, 1.0] range
+        ValueError: If bias_scores format is invalid or missing expected layers
+        
+    Example:
+        >>> from optipfair.bias import compute_fairness_pruning_scores
+        >>> 
+        >>> # After computing bias_scores with analyze_neuron_bias()
+        >>> fairness_scores = compute_fairness_pruning_scores(
+        ...     model=model,
+        ...     bias_scores=bias_scores,
+        ...     bias_weight=0.45  # Balanced approach
+        ... )
+        >>> 
+        >>> # Identify neurons safe to prune
+        >>> for layer_idx, scores in fairness_scores.items():
+        ...     safe_neurons = (scores > 0.75).sum().item()
+        ...     print(f"Layer {layer_idx}: {safe_neurons} safe neurons")
+    """
+```
+
 ## Pruning Module
 
 ### MLP GLU Pruning

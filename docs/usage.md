@@ -738,3 +738,170 @@ When using tuple or list batches, elements are automatically mapped to standard 
 **Note**: All formats are fully backward compatible. Existing code continues to work without modifications.
 
 ---
+
+## Fairness-Aware Pruning (NEW in v0.3.0)
+
+OptiPFair v0.3.0 introduces fairness-aware pruning, which combines bias analysis with pruning decisions to create models that are both smaller and potentially less biased.
+
+### Overview
+
+Traditional pruning focuses solely on minimizing performance loss. Fairness-aware pruning adds an additional dimension: identifying and potentially removing neurons that contribute to demographic bias.
+
+The workflow consists of two main steps:
+
+1. **Analyze Neuron Bias**: Identify which neurons contribute most to bias across demographic groups
+2. **Compute Fairness Scores**: Combine bias scores with importance scores for balanced pruning decisions
+
+### Step 1: Analyze Neuron Bias
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import optipfair as opf
+from optipfair.bias import analyze_neuron_bias
+
+# Load model
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+
+# Define prompt pairs that differ only in demographic attributes
+prompt_pairs = [
+    ("The male nurse was helpful.", "The female nurse was helpful."),
+    ("White doctor examined the patient.", "Black doctor examined the patient."),
+    ("Young engineer designed the system.", "Old engineer designed the system."),
+]
+
+# Analyze per-neuron bias
+bias_scores = analyze_neuron_bias(
+    model=model,
+    tokenizer=tokenizer,
+    prompt_pairs=prompt_pairs,
+    target_layers=["gate_proj", "up_proj"],  # Analyze these MLP components
+    aggregation="mean",                       # "mean" or "max" across tokens
+    batch_size=4,
+    show_progress=True
+)
+
+# bias_scores maps layer names to bias tensors
+print(f"Analyzed {len(bias_scores)} layers")
+```
+
+### Step 2: Compute Fairness Pruning Scores
+
+```python
+from optipfair.bias import compute_fairness_pruning_scores
+
+# Combine bias with importance
+fairness_scores = compute_fairness_pruning_scores(
+    model=model,
+    bias_scores=bias_scores,
+    bias_weight=0.45  # Balance fairness (0.0-1.0) vs performance
+)
+
+# fairness_scores maps layer indices to pruning score tensors
+# Higher scores = safer to prune (low bias + low importance)
+for layer_idx, scores in fairness_scores.items():
+    safe_neurons = (scores > 0.75).sum().item()
+    print(f"Layer {layer_idx}: {safe_neurons} neurons safe to prune")
+```
+
+### Understanding bias_weight Parameter
+
+The `bias_weight` parameter controls the trade-off between fairness and performance:
+
+| bias_weight | Use Case |
+|-------------|----------|
+| **0.0** | Pure performance - ignore bias (standard pruning) |
+| **0.2** | Performance-critical - secondary fairness concerns |
+| **0.4-0.5** | **Balanced - good compression + fairness (RECOMMENDED)** |
+| **0.7** | Fairness-critical - reduce bias even at performance cost |
+| **1.0** | Pure fairness - prioritize bias reduction over all |
+
+### Complete Fairness-Aware Pruning Example
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import optipfair as opf
+from optipfair.bias import analyze_neuron_bias, compute_fairness_pruning_scores
+
+# 1. Load model
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+
+# 2. Define demographic test pairs
+prompt_pairs = [
+    ("The Christian employee worked hard.", "The Muslim employee worked hard."),
+    ("The wealthy student studied diligently.", "The poor student studied diligently."),
+]
+
+# 3. Analyze neuron-level bias
+print("Step 1: Analyzing neuron bias...")
+bias_scores = analyze_neuron_bias(
+    model=model,
+    tokenizer=tokenizer,
+    prompt_pairs=prompt_pairs,
+    target_layers=["gate_proj", "up_proj"],
+    aggregation="mean",
+    show_progress=True
+)
+
+# 4. Compute fairness pruning scores
+print("Step 2: Computing fairness scores...")
+fairness_scores = compute_fairness_pruning_scores(
+    model=model,
+    bias_scores=bias_scores,
+    bias_weight=0.45  # Balanced approach
+)
+
+# 5. Analyze which neurons are safe to prune
+print("\nStep 3: Analyzing results...")
+for layer_idx, scores in fairness_scores.items():
+    high_score = (scores > 0.75).sum().item()
+    print(f"Layer {layer_idx}: {high_score} neurons are safe to prune (score > 0.75)")
+
+# 6. Perform standard pruning
+# (Current implementation - use fairness analysis to guide understanding)
+print("\nStep 4: Pruning model...")
+pruned_model, stats = opf.prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",
+    pruning_percentage=15,
+    show_progress=True,
+    return_stats=True
+)
+
+print(f"\nPruning complete: {stats['percentage_reduction']:.2f}% reduction")
+print("Next: Evaluate bias metrics to measure fairness improvement")
+
+# 7. Re-evaluate bias after pruning (optional)
+# Re-run analyze_neuron_bias on pruned_model to compare
+```
+
+### Practical Tips
+
+**1. Choosing Prompt Pairs**
+
+Create prompt pairs that:
+- Differ in exactly ONE demographic attribute
+- Are otherwise identical in structure and content
+- Cover the demographic dimensions you care about (gender, race, age, religion, etc.)
+- Use natural, realistic language
+
+**2. Selecting bias_weight**
+
+Start with `bias_weight=0.4-0.5` for balanced results. Adjust based on:
+- If performance drops too much → decrease bias_weight (e.g., 0.3)
+- If bias reduction is insufficient → increase bias_weight (e.g., 0.6)
+
+**3. Interpreting Fairness Scores**
+
+- **High scores (>0.75)**: Safe to prune - low bias AND low importance
+- **Medium scores (0.4-0.75)**: Moderate risk - evaluate case-by-case  
+- **Low scores (<0.4)**: Risky to prune - high bias OR high importance
+
+**4. Example Notebook**
+
+For a complete working example with visualizations, see:
+- [examples/fairness_aware_pruning_demo.ipynb](../examples/fairness_aware_pruning_demo.ipynb)
+
+---

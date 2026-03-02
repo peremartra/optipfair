@@ -2,6 +2,47 @@
 
 ---
 
+## [0.3.0] - 2026-03-02
+
+### 🎉 New Features
+
+#### Fairness-Aware Pruning
+- **New Function**: `analyze_neuron_bias()` - Analyze per-neuron bias contributions across multiple demographic prompt pairs
+  - Computes activation-based bias scores for individual neurons
+  - Supports multiple aggregation methods (mean, max) across sequence positions
+  - Works with GLU architecture MLP layers (gate_proj, up_proj)
+- **New Function**: `compute_fairness_pruning_scores()` - Combine bias and importance scores for balanced pruning
+  - Configurable `bias_weight` parameter (0.0 to 1.0) to adjust fairness vs. performance trade-offs
+  - Returns fairness pruning scores for each layer
+  - Enables fairness-aware neuron selection strategies
+
+#### Enhanced Pruning Integration
+- **Modified**: `prune_model_mlp_glu()` - Improved compatibility with fairness-aware workflows
+- **Documentation**: Added comprehensive fairness-aware pruning guide with examples
+
+### 📚 Documentation Enhancements
+
+#### New Fairness-Aware Pruning Section
+- Complete guide to fairness-aware pruning workflow with:
+  - Step-by-step tutorial for `analyze_neuron_bias()`
+  - Step-by-step tutorial for `compute_fairness_pruning_scores()`
+  - Understanding the bias_weight parameter with recommended configurations
+  - Complete end-to-end example combining bias analysis with pruning
+  - Common patterns for fairness-aware analysis
+- New example notebook: `fairness_aware_pruning_demo.ipynb`
+
+#### Updated API Documentation
+- Added `analyze_neuron_bias()` to API reference
+- Added `compute_fairness_pruning_scores()` to API reference
+- Enhanced usage guide with fairness workflows
+
+### 🧪 Testing & Quality
+- Compatible with existing pruning functionality
+- No breaking changes to existing API
+- All existing tests remain passing
+
+---
+
 ## [0.2.4] - 2026-01-10
 
 ### 🎉 New Features

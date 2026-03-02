@@ -1421,6 +1421,244 @@ for i, prompt_pair in enumerate(selected_pairs):
         )
 ```
 
+## Fairness-Aware Pruning (NEW in v0.3.0)
+
+OptiPFair v0.3.0 introduces comprehensive fairness-aware pruning capabilities that combine neuron bias analysis with pruning decisions. Instead of pruning based solely on static weight magnitudes, you can now prune neurons while considering their contribution to bias across demographic groups.
+
+### Overview
+
+The fairness-aware pruning workflow consists of two main steps:
+
+1. **Neuron-Level Bias Analysis** (`analyze_neuron_bias`): Compute bias scores for individual neurons across multiple demographic prompt pairs
+2. **Fairness-Aware Pruning Scores** (`compute_fairness_pruning_scores`): Combine bias scores with importance scores to create balanced pruning decisions
+
+### Step 1: Analyzing Neuron Bias
+
+The `analyze_neuron_bias()` function calculates per-neuron bias scores across multiple prompt pairs that differ only in demographic attributes:
+
+```python
+from optipfair.bias import analyze_neuron_bias
+import optipfair as opf
+
+# Define prompt pairs that differ in demographic attributes
+prompt_pairs = [
+    (
+        "The male nurse helped the patient recover. The doctor recommended",
+        "The female nurse helped the patient recover. The doctor recommended"
+    ),
+    (
+        "The white scientist discovered a new element. The laboratory director said",
+        "The Black scientist discovered a new element. The laboratory director said"
+    ),
+    (
+        "The young engineer designed the bridge. The supervisor praised",
+        "The old engineer designed the bridge. The supervisor praised"
+    ),
+]
+
+# Analyze bias at the neuron level
+bias_scores = analyze_neuron_bias(
+    model=model,
+    tokenizer=tokenizer,
+    prompt_pairs=prompt_pairs,
+    target_layers=["gate_proj", "up_proj"],  # Analyze these layer types
+    aggregation="mean",                       # "mean" or "max" across sequence length
+    batch_size=4,
+    show_progress=True
+)
+
+# bias_scores is a Dict[str, Tensor] mapping layer names to bias tensors
+# Example: {"gate_proj_layer_5": tensor(...), "up_proj_layer_5": tensor(...), ...}
+print(f"Analyzed {len(bias_scores)} layers")
+print(f"Example - {list(bias_scores.keys())[0]}: shape {bias_scores[list(bias_scores.keys())[0]].shape}")
+```
+
+**Parameters explanation:**
+
+- `model`: Your HuggingFace CausalLM with GLU architecture
+- `tokenizer`: Matching tokenizer for encoding prompts
+- `prompt_pairs`: List of (prompt1, prompt2) tuples. Each pair should differ only in the demographic attribute being tested
+- `target_layers`: Which layer projections to analyze — `["gate_proj", "up_proj"]` covers GLU MLP components
+- `aggregation`: How to aggregate bias across sequence positions:
+  - `"mean"`: Average bias across all token positions (default, more stable)
+  - `"max"`: Maximum bias in any position (captures peaks, more sensitive)
+- `batch_size`: Batch size for processing prompt pairs (adjust based on GPU memory)
+- `show_progress`: Display progress bar while processing
+
+### Step 2: Computing Fairness Pruning Scores
+
+Once you have bias scores, combine them with importance scores to create balanced pruning decisions:
+
+```python
+from optipfair.bias import compute_fairness_pruning_scores
+import optipfair as opf
+
+# Compute fairness pruning scores
+# Balances bias (don't prune highly-biased neurons) with importance (prune non-essential neurons)
+fairness_scores = compute_fairness_pruning_scores(
+    model=model,
+    bias_scores=bias_scores,
+    bias_weight=0.4  # Weight between 0.0 (importance-only) and 1.0 (bias-only)
+)
+
+# fairness_scores is a Dict[int, Tensor] mapping layer indices to fairness score tensors
+# Higher scores = neurons that are safe to prune (low bias, low importance)
+print(f"Computed scores for {len(fairness_scores)} layers")
+```
+
+**Understanding the bias_weight parameter:**
+
+The fairness pruning score combines two factors:
+
+$$\text{FairnessPruningScore} = \text{bias\_weight} \times \text{BiasScore}_{\text{norm}} + (1 - \text{bias\_weight}) \times (1 - \text{ImportanceScore}_{\text{norm}})$$
+
+- `bias_weight=0.0`: Prune based on importance only (ignore bias) — standard pruning
+- `bias_weight=0.5`: Equal weight to bias and importance — balanced approach (recommended)
+- `bias_weight=1.0`: Prune based on bias only (preserve important but biased neurons)
+
+**Common configurations:**
+
+| bias_weight | Use Case |
+|-------------|----------|
+| 0.2 | Performance-critical: minimize quality loss, secondary fairness concerns |
+| **0.4-0.5** | **Balanced: good compression + fairness improvement (RECOMMENDED)** |
+| 0.7 | Fairness-critical: reduce bias even if losing some performance |
+| 1.0 | Bias elimination: prioritize fairness over all else |
+
+### Step 3: Fairness-Aware Pruning
+
+Use the fairness scores to guide pruning decisions:
+
+```python
+# Option 1: Use fairness scores directly with prune_model
+# (Adapt this to your pruning function if using custom pruning)
+from optipfair.pruning.mlp_glu import prune_model_mlp_glu
+
+# Prune using fairness scores to identify which neurons to remove
+pruned_model = prune_model_mlp_glu(
+    model=model,
+    neuron_selection_method="MAW",
+    pruning_percentage=20,  # Remove 20% of neurons
+    # Note: Current version performs pruning with static weights
+    # Fairness scores can be used to post-process or guide selective pruning
+)
+
+# Option 2: Selective fairness-aware pruning per layer
+# Prune high-score neurons (safe to remove) from each layer
+import torch
+
+fairness_threshold = 0.5  # Prune neurons with score > threshold
+
+for layer_idx, layer_scores in fairness_scores.items():
+    neurons_to_prune = (layer_scores > fairness_threshold).nonzero(as_tuple=True)[0]
+    print(f"Layer {layer_idx}: Identified {len(neurons_to_prune)} neurons to prune based on fairness")
+```
+
+### Complete Example: End-to-End Fairness-Aware Pruning
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import optipfair as opf
+from optipfair.bias import analyze_neuron_bias, compute_fairness_pruning_scores
+
+# 1. Load model
+model_name = "meta-llama/Llama-3.2-1B"
+model = AutoModelForCausalLM.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# 2. Define demographic attribute test pairs
+prompt_pairs = [
+    ("The male nurse was very helpful. Patients said", 
+     "The female nurse was very helpful. Patients said"),
+    ("John, a Christian, wrote the proposal. The board said",
+     "Mohammad, a Muslim, wrote the proposal. The board said"),
+    ("The wealthy couple needed assistance. The advisor suggested",
+     "The poor couple needed assistance. The advisor suggested"),
+]
+
+# 3. Analyze neuron-level bias
+print("Analyzing neuron bias...")
+bias_scores = analyze_neuron_bias(
+    model=model,
+    tokenizer=tokenizer,
+    prompt_pairs=prompt_pairs,
+    target_layers=["gate_proj", "up_proj"],
+    aggregation="mean",
+    batch_size=4,
+    show_progress=True
+)
+
+# 4. Compute fairness pruning scores
+print("Computing fairness pruning scores...")
+fairness_scores = compute_fairness_pruning_scores(
+    model=model,
+    bias_scores=bias_scores,
+    bias_weight=0.45  # Balanced approach
+)
+
+# 5. Analyze results
+print("\n=== Fairness Analysis Results ===")
+for layer_idx, scores in fairness_scores.items():
+    safe_neurons = (scores > 0.75).sum().item()  # High score = safe to prune
+    print(f"Layer {layer_idx}: {safe_neurons} neurons safe to prune (score > 0.75)")
+
+# 6. Perform standard pruning (separate step, using analysis above for understanding)
+print("\nPerforming standard pruning...")
+pruned_model, stats = opf.prune_model(
+    model=model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="MAW",
+    pruning_percentage=15,
+    show_progress=True,
+    return_stats=True
+)
+
+# 7. Evaluate results (pseudo-code)
+# You would then evaluate:
+# - Pruning statistics (parameter reduction, latency improvement)
+# - Model performance (benchmark scores)
+# - Changes in bias metrics (re-run analyze_neuron_bias and compare)
+print("Pruning complete. Now evaluate performance and bias metrics.")
+```
+
+### Example Notebook
+
+For a complete working example with visualization and detailed analysis, see:
+- [fairness_aware_pruning_demo.ipynb](examples/fairness_aware_pruning_demo.ipynb)
+
+### Common Patterns
+
+**Pattern 1: Identify Most Biased Neurons**
+```python
+# Find neurons with high bias across the model
+all_biases = torch.cat([scores.flatten() for scores in bias_scores.values()])
+tolerance = all_biases.quantile(0.95)  # Top 5% most biased
+print(f"Neurons with extreme bias (>95th percentile): {(all_biases > tolerance).sum()}")
+```
+
+**Pattern 2: Layer-Specific Fairness Analysis**
+```python
+# Analyze which layers are most biased
+layer_bias_means = {
+    layer_name: scores.mean().item() 
+    for layer_name, scores in bias_scores.items()
+}
+
+most_biased_layer = max(layer_bias_means, key=layer_bias_means.get)
+print(f"Most biased layer: {most_biased_layer} (mean bias: {layer_bias_means[most_biased_layer]:.4f})")
+```
+
+**Pattern 3: Fairness-Aware Selective Pruning**
+```python
+# Only prune specific layers based on fairness profile
+layers_to_prune = ["gate_proj_layer_5", "gate_proj_layer_10", "up_proj_layer_8"]
+selective_pruning_config = {
+    layer: fairness_scores.get(layer, None) 
+    for layer in layers_to_prune
+}
+# Use config to guide selective pruning on specific layers
+```
+
 ## Roadmap and Future Extensions
 
 According to the roadmap, OptiPFair has several planned extensions:
@@ -1437,18 +1675,22 @@ According to the roadmap, OptiPFair has several planned extensions:
 - **Attention Mechanism Pruning**: Implement pruning techniques for attention layers
 - **Transformer Block Pruning**: Implement pruning techniques for entire transformer blocks
 
-### Version 0.3.0
-- **Comprehensive Benchmarks**: Add integration with common LLM benchmarks
-- **NO GLU Models**: Implement pruning techniques for older models (no GLU)
-- **Improved Documentation**: Add more examples and tutorials
+### Version 0.3.0 (Released - 2 March 2026)
+- **Fairness-Aware Pruning**: Combine bias analysis with pruning decisions ✓
+  - `analyze_neuron_bias()` - Analyze per-neuron bias across demographic groups
+  - `compute_fairness_pruning_scores()` - Create balanced pruning scores combining bias + importance
+  - Configurable bias_weight parameter for adjusting fairness vs. performance trade-offs
+- **Enhanced Documentation**: Comprehensive examples for fairness-aware workflows ✓
+- **Planned for Future**: Comprehensive Benchmarks, NO GLU model support
 
 ### Longer-term Goals
 - **Configuration Presets**: Pre-optimized pruning configurations
-- **Fairness Pruning**: Pruning techniques that consider bias
 - **Distributed Pruning**: Support for pruning very large models
 - **Dynamic Pruning**: Runtime pruning based on inference context
 - **Knowledge Distillation**: Integration with knowledge distillation
 - **Automated Pruning**: Algorithms to determine optimal pruning parameters
+- **NO GLU Models**: Implement pruning techniques for older models (no GLU)
+- **Comprehensive Benchmarks**: Add integration with common LLM benchmarks
 
 ## Troubleshooting
 
