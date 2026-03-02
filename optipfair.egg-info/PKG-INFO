@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: optipfair
-Version: 0.2.4
+Version: 0.3.0
 Summary: A library for structured pruning & Bias visualization of large language models
 Home-page: https://github.com/peremartra/optipfair
 Author: Pere Martra

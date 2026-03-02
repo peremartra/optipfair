@@ -10,6 +10,7 @@ docs/contributing.md
 docs/examples.md
 docs/index.md
 docs/installation.md
+docs/neuron-bias-fairness-pruning-spec.md
 docs/roadmap.md
 docs/usage.md
 optipfair/__init__.py
