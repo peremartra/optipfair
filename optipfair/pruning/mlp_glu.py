@@ -398,11 +398,12 @@ def prune_neuron_pairs(
     activation_norms: Optional[torch.Tensor] = None,
     layer_idx: Optional[int] = None,
     expansion_divisor: Optional[int] = None,
+    custom_importance_scores: Optional[torch.Tensor] = None,
 ) -> Tuple[nn.Linear, nn.Linear, nn.Linear, int]:
     """
     Prune a specific percentage of neurons from the MLP layers (GLU architecture).
     
-    Supports both static (weight-only) and hybrid (weight + activation) pruning.
+    Supports static (weight-only), hybrid (weight + activation), and fairness-aware pruning.
     
     Args:
         mlp: MLP module containing gate_proj, up_proj, and down_proj layers
@@ -412,6 +413,10 @@ def prune_neuron_pairs(
             When provided, uses hybrid importance calculation.
         layer_idx: Layer index (used for logging when activation_norms provided)
         expansion_divisor: Optional divisor to round the intermediate size to nearest multiple
+        custom_importance_scores: Optional pre-computed importance scores of shape [intermediate_size]
+            on CPU. If provided, overrides importance_fn and activation_norms. Used for fairness-aware
+            pruning. Scores should be normalized to [0, 1] range. Internally inverted before pruning
+            (fairness semantics: high=prune candidate). Default: None (uses importance_fn or activation_norms).
         
     Returns:
         new_gate_proj: Pruned gate_proj layer
@@ -427,8 +432,34 @@ def prune_neuron_pairs(
     up_weight = mlp.up_proj.weight.data.float()
     down_weight = mlp.down_proj.weight.data.float()
     
-    # Compute importance scores (HYBRID or STATIC)
-    if activation_norms is not None:
+    # Compute importance scores with precedence: custom_scores > activation_norms > importance_fn
+    if custom_importance_scores is not None:
+        # FAIRNESS-AWARE: Use pre-computed fairness scores
+        # Validate shape
+        expected_size = gate_weight.shape[0]
+        if custom_importance_scores.shape[0] != expected_size:
+            raise ValueError(
+                f"custom_importance_scores shape mismatch: expected [{expected_size}], "
+                f"got {list(custom_importance_scores.shape)}"
+            )
+        
+        # Validate values are in [0, 1] range (normalized fairness scores)
+        if custom_importance_scores.min() < 0 or custom_importance_scores.max() > 1:
+            raise ValueError(
+                f"custom_importance_scores must be in [0, 1] range, "
+                f"got min={custom_importance_scores.min():.4f}, max={custom_importance_scores.max():.4f}"
+            )
+        
+        # Move to same device as weights
+        importance_scores = custom_importance_scores.to(gate_weight.device).float()
+        
+        # CRITICAL: Invert scores for topk semantics
+        # Fairness semantics: high score = prune candidate
+        # topk semantics: largest=True = KEEP
+        # Solution: invert to convert high-prune-candidate to low-keep-score
+        importance_scores = 1.0 - importance_scores
+        
+    elif activation_norms is not None:
         # DATA-DRIVEN: Use hybrid importance calculation
         importance_scores = compute_neuron_pair_importance_maw_hybrid(
             gate_weight=gate_weight,
@@ -523,6 +554,7 @@ def prune_model_mlp_glu(
     expansion_divisor: Optional[int] = None,
     dataloader: Optional[Any] = None,
     layer_indices: Optional[List[int]] = None,
+    fairness_scores: Optional[Dict[int, torch.Tensor]] = None,
     show_progress: bool = True,
 ) -> PreTrainedModel:
     """
@@ -548,6 +580,11 @@ def prune_model_mlp_glu(
             both weight magnitudes and activation statistics. Only compatible with PPM/'MAW'.
         layer_indices: Optional list of layer indices to prune. If None, all layers are pruned.
             When specified, only the listed layers will have their neurons pruned; other layers remain unchanged.
+        fairness_scores: Optional pre-computed fairness pruning scores for selective layers.
+            Keys are layer indices (0, 1, 2, ...). Values are tensors of shape [intermediate_size] on CPU
+            (from compute_fairness_pruning_scores). When provided, takes precedence over activation_norms
+            and neuron_selection_method. For layers with scores, fairness-aware pruning is applied.
+            For layers without scores, standard pruning is applied. Default: None (uses neuron_selection_method).
         show_progress: Whether to show progress during pruning
         
     Returns:
@@ -583,6 +620,26 @@ def prune_model_mlp_glu(
             raise ValueError("layer_indices contains duplicate values")
         
         logger.info(f"Selective pruning: will prune {len(layer_indices)} of {len(layers)} layers: {sorted(layer_indices)}")
+    
+    # Validate fairness_scores if provided
+    if fairness_scores is not None:
+        if not isinstance(fairness_scores, dict):
+            raise TypeError(
+                f"fairness_scores must be Dict[int, torch.Tensor], got {type(fairness_scores)}"
+            )
+        
+        for layer_idx, scores in fairness_scores.items():
+            if not isinstance(layer_idx, int):
+                raise TypeError(
+                    f"fairness_scores keys must be int, got {type(layer_idx)} for key {layer_idx}"
+                )
+            if not isinstance(scores, torch.Tensor):
+                raise TypeError(
+                    f"fairness_scores values must be torch.Tensor, got {type(scores)} for layer {layer_idx}"
+                )
+            # Shape validation will be done per-layer in prune_neuron_pairs()
+        
+        logger.info(f"Fairness-aware pruning: using pre-computed scores for {len(fairness_scores)} layers")
     
     # Validate expansion_divisor
     if expansion_divisor is not None:
@@ -713,7 +770,12 @@ def prune_model_mlp_glu(
                 )
             layer_activation_norms = activation_norms[idx]
         
-        # Prune the neuron pairs (HYBRID if activation_norms provided, STATIC otherwise)
+        # Get fairness scores for this layer (if available)
+        custom_scores = None
+        if fairness_scores is not None:
+            custom_scores = fairness_scores.get(idx)
+        
+        # Prune the neuron pairs (precedence: fairness > activation_norms > importance_fn)
         new_gate_proj, new_up_proj, new_down_proj, new_intermediate_size = prune_neuron_pairs(
             mlp=mlp,
             prune_percentage=pruning_percentage,
@@ -721,6 +783,7 @@ def prune_model_mlp_glu(
             activation_norms=layer_activation_norms,
             layer_idx=idx,
             expansion_divisor=expansion_divisor,
+            custom_importance_scores=custom_scores,
         )
         
         # Replace original layers with pruned layers
