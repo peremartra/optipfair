@@ -11,6 +11,11 @@ from transformers import PreTrainedModel
 
 from .pruning.mlp_glu import prune_model_mlp_glu
 from .pruning.depth import prune_model_depth, analyze_layer_importance
+from .distillation import distill_model
+from .distillation.mapping import (
+    MAPPING_UNIFORM,
+    MAPPING_LAST,
+)
 
 from .pruning.utils import (
     get_pruning_statistics,

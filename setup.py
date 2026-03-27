@@ -27,6 +27,7 @@ setup(
         "transformers>=4.25.0",
         "tqdm>=4.62.0",
         "click>=8.0.0",
+        "numpy>=1.20.0",
     ],
     extras_require={
         "dev": [
