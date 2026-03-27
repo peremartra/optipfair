@@ -95,6 +95,14 @@ def distill_model(
     if teacher_device != device:
         teacher_model.to(device)
 
+    # Disable KV-cache for both models during distillation.
+    # Hybrid architectures (e.g. Qwen3.5 GatedDeltaNet) allocate cache buffers
+    # based on config.layer_types at forward time. After depth pruning the buffer
+    # dimensions no longer match the reduced layer count, causing an IndexError.
+    # Training never needs the cache, so disabling it is always correct here.
+    student_model.config.use_cache = False
+    teacher_model.config.use_cache = False
+
     student_model.train()
     teacher_model.eval()
 

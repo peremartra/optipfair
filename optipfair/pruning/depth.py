@@ -205,6 +205,21 @@ def remove_layers_from_model(
         model.config.num_hidden_layers = len(new_layers)
         logger.info(f"Updated model config: num_hidden_layers = {len(new_layers)}")
 
+    # Reassign layer_idx on all remaining layers.
+    # Some hybrid architectures (e.g. Qwen3.5 GatedDeltaNet) use layer_idx to
+    # index into pre-allocated cache buffers (conv_states, recurrent_states).
+    # After pruning, layers that keep their original index will attempt
+    # out-of-range accesses. We update both the decoder layer itself and its
+    # immediate children (e.g. linear_attn / self_attn) that may carry their
+    # own layer_idx.
+    for new_idx, layer in enumerate(new_layers):
+        if hasattr(layer, 'layer_idx'):
+            layer.layer_idx = new_idx
+        for submodule in layer.children():
+            if hasattr(submodule, 'layer_idx'):
+                submodule.layer_idx = new_idx
+    logger.info("Reassigned layer_idx on all remaining layers and their direct children.")
+
     # Sync layer_types if present in config.
     # Some hybrid architectures (e.g. Qwen3.5 with GatedDeltaNet SSM layers) use
     # config.layer_types to determine how many conv_states slots to allocate on each
