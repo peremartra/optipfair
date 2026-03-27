@@ -100,6 +100,9 @@ def distill_model(
     # based on config.layer_types at forward time. After depth pruning the buffer
     # dimensions no longer match the reduced layer count, causing an IndexError.
     # Training never needs the cache, so disabling it is always correct here.
+    # We restore the original values on exit so the caller's config is unchanged.
+    _student_use_cache = getattr(student_model.config, 'use_cache', None)
+    _teacher_use_cache = getattr(teacher_model.config, 'use_cache', None)
     student_model.config.use_cache = False
     teacher_model.config.use_cache = False
 
@@ -233,6 +236,13 @@ def distill_model(
         epoch_times.append(time.time() - epoch_start_time)
 
     total_time = time.time() - total_start_time
+
+    # Restore use_cache to its original value so the caller's model config
+    # is not permanently modified by distill_model().
+    if _student_use_cache is not None:
+        student_model.config.use_cache = _student_use_cache
+    if _teacher_use_cache is not None:
+        teacher_model.config.use_cache = _teacher_use_cache
 
     if not return_stats:
         return student_model
