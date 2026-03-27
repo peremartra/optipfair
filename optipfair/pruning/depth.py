@@ -204,9 +204,27 @@ def remove_layers_from_model(
     if hasattr(model, 'config') and hasattr(model.config, 'num_hidden_layers'):
         model.config.num_hidden_layers = len(new_layers)
         logger.info(f"Updated model config: num_hidden_layers = {len(new_layers)}")
-    
+
+    # Sync layer_types if present in config.
+    # Some hybrid architectures (e.g. Qwen3.5 with GatedDeltaNet SSM layers) use
+    # config.layer_types to determine how many conv_states slots to allocate on each
+    # forward pass. If layer_types is not kept in sync with the pruned ModuleList the
+    # model raises an IndexError during training/inference. Removing entries from
+    # highest to lowest index avoids index-shift corruption.
+    if (
+        hasattr(model, 'config')
+        and hasattr(model.config, 'layer_types')
+        and model.config.layer_types is not None
+    ):
+        synced_layer_types = list(model.config.layer_types)
+        for idx in sorted(layer_indices_to_remove, reverse=True):
+            if idx < len(synced_layer_types):
+                synced_layer_types.pop(idx)
+        model.config.layer_types = synced_layer_types
+        logger.info(f"Synced config.layer_types: {len(synced_layer_types)} entries remaining.")
+
     logger.info(f"Removed {len(layer_indices_to_remove)} layers. Model now has {len(new_layers)} layers.")
-    
+
     return model
 
 def _infer_layers_path(model):
