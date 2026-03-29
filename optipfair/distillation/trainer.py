@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import PreTrainedModel
@@ -37,6 +38,8 @@ def distill_model(
     skew_alpha: float = 0.4,
     epochs: int = 3,
     learning_rate: float = 4e-5,
+    scheduler: str = "cosine",
+    warmup_ratio: float = 0.05,
     accumulation_steps: int = 4,
     show_progress: bool = True,
     return_stats: bool = False,
@@ -57,6 +60,8 @@ def distill_model(
         skew_alpha: Skew interpolation factor.
         epochs: Number of epochs.
         learning_rate: AdamW learning rate.
+        scheduler: Learning rate scheduler strategy ("cosine" or "none").
+        warmup_ratio: Proportion of total optimization steps used for warmup.
         accumulation_steps: Gradient accumulation steps.
         show_progress: Whether to show tqdm progress bars.
         return_stats: Whether to return stats with the trained model.
@@ -79,6 +84,12 @@ def distill_model(
 
     if layer_mapping_strategy not in (MAPPING_UNIFORM, MAPPING_LAST):
         raise ValueError(f"Unsupported layer_mapping_strategy: '{layer_mapping_strategy}'.")
+
+    if scheduler not in ("cosine", "none"):
+        raise ValueError("scheduler must be one of {'cosine', 'none'}.")
+
+    if not 0.0 <= warmup_ratio <= 1.0:
+        raise ValueError("warmup_ratio must be between 0.0 and 1.0.")
 
     if accumulation_steps <= 0:
         raise ValueError("accumulation_steps must be a positive integer.")
@@ -119,6 +130,43 @@ def distill_model(
 
     optimizer = AdamW(student_model.parameters(), lr=learning_rate)
     optimizer.zero_grad()
+
+    total_steps = len(dataloader) // accumulation_steps * epochs
+    warmup_steps = int(total_steps * warmup_ratio)
+    cosine_steps = total_steps - warmup_steps
+
+    scheduler_instance = None
+    if scheduler == "cosine" and total_steps > 0:
+        if warmup_steps <= 0:
+            scheduler_instance = CosineAnnealingLR(
+                optimizer,
+                T_max=max(1, cosine_steps),
+                eta_min=learning_rate * 0.05,
+            )
+        elif cosine_steps <= 0:
+            scheduler_instance = LinearLR(
+                optimizer,
+                start_factor=1e-2,
+                end_factor=1.0,
+                total_iters=max(1, warmup_steps),
+            )
+        else:
+            warmup_scheduler = LinearLR(
+                optimizer,
+                start_factor=1e-2,
+                end_factor=1.0,
+                total_iters=warmup_steps,
+            )
+            cosine_scheduler = CosineAnnealingLR(
+                optimizer,
+                T_max=cosine_steps,
+                eta_min=learning_rate * 0.05,
+            )
+            scheduler_instance = SequentialLR(
+                optimizer,
+                schedulers=[warmup_scheduler, cosine_scheduler],
+                milestones=[warmup_steps],
+            )
 
     loss_history = {
         "total": [],
@@ -192,6 +240,8 @@ def distill_model(
             if (batch_idx + 1) % accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(student_model.parameters(), max_norm=1.0)
                 optimizer.step()
+                if scheduler_instance is not None:
+                    scheduler_instance.step()
                 optimizer.zero_grad()
 
                 avg_losses = {
@@ -218,6 +268,8 @@ def distill_model(
         if accumulation_counter > 0:
             torch.nn.utils.clip_grad_norm_(student_model.parameters(), max_norm=1.0)
             optimizer.step()
+            if scheduler_instance is not None:
+                scheduler_instance.step()
             optimizer.zero_grad()
 
             avg_losses = {

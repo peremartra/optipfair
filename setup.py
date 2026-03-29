@@ -23,7 +23,7 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        "torch>=1.10.0",
+        "torch>1.11.0",
         "transformers>=4.25.0",
         "tqdm>=4.62.0",
         "click>=8.0.0",

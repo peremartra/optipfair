@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### 🔧 Compatibility
+
+- Raised minimum PyTorch requirement to `>1.11.0`.
+
 ---
 
 ## [0.3.0] - 2026-03-02

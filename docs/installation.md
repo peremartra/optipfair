@@ -5,7 +5,7 @@
 OptiPFair requires:
 
 - Python 3.8 or higher
-- PyTorch 1.10.0 or higher
+- PyTorch >1.11.0
 - Transformers 4.25.0 or higher
 
 ## Installing from PyPI

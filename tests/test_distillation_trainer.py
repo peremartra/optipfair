@@ -127,6 +127,15 @@ class TestDistillModelValidation(unittest.TestCase):
                 gamma=0.1,
             )
 
+    def test_raises_if_invalid_scheduler(self):
+        with self.assertRaises(ValueError):
+            distill_model(
+                self.student,
+                self.teacher,
+                self.dataloader,
+                scheduler="linear",
+            )
+
 
 class TestDistillModelReturnValues(unittest.TestCase):
 
@@ -227,6 +236,55 @@ class TestDistillModelReturnValues(unittest.TestCase):
         )
         self.assertEqual(len(stats["epoch_times_seconds"]), n_epochs)
         self.assertEqual(len(stats["loss_history"]["total"]), n_epochs)
+
+    def test_runs_with_scheduler_none(self):
+        _, stats = distill_model(
+            self.student,
+            self.teacher,
+            self.dataloader,
+            scheduler="none",
+            epochs=1,
+            show_progress=False,
+            return_stats=True,
+        )
+        self.assertEqual(stats["epochs"], 1)
+
+    def test_runs_with_scheduler_cosine(self):
+        # num_batches=8, accumulation_steps=2, warmup_ratio=0.25:
+        # total_steps=4, warmup_steps=1, cosine_steps=3 → exercises SequentialLR path.
+        dataloader = make_tuple_dataloader(num_batches=8)
+        _, stats = distill_model(
+            self.student,
+            self.teacher,
+            dataloader,
+            scheduler="cosine",
+            warmup_ratio=0.25,
+            accumulation_steps=2,
+            epochs=1,
+            show_progress=False,
+            return_stats=True,
+        )
+        self.assertEqual(stats["epochs"], 1)
+
+    def test_scheduler_cosine_steps_both_blocks(self):
+        # num_batches=5, accumulation_steps=2, warmup_ratio=0.5:
+        # total_steps=2, warmup_steps=1, cosine_steps=1 → SequentialLR.
+        # Main block fires at batch 1 and 3 (2 optimizer steps).
+        # Remainder block fires at batch 4 (1 optimizer step).
+        # Both scheduler.step() call sites are exercised.
+        dataloader = make_tuple_dataloader(num_batches=5)
+        _, stats = distill_model(
+            self.student,
+            self.teacher,
+            dataloader,
+            scheduler="cosine",
+            warmup_ratio=0.5,
+            accumulation_steps=2,
+            epochs=1,
+            show_progress=False,
+            return_stats=True,
+        )
+        self.assertEqual(stats["epochs"], 1)
 
 
 class TestDistillModelBatchFormats(unittest.TestCase):
