@@ -16,6 +16,7 @@ from optipfair.pruning.mlp_glu import (
     compute_neuron_pair_importance_vow,
     compute_neuron_pair_importance_pon,
     compute_neuron_pair_importance_l2,
+    round_to_divisor,
     prune_neuron_pairs,
     calculate_pruning_percentage_from_expansion_rate,
 )
@@ -177,6 +178,24 @@ class TestMLPGLUPruning(unittest.TestCase):
             calculate_pruning_percentage_from_expansion_rate(
                 current_intermediate_size, current_hidden_size, target_expansion_rate
             )
+
+    def test_round_to_divisor_uses_floor(self):
+        """Test round_to_divisor rounds down, never up."""
+        self.assertEqual(round_to_divisor(8100, 128), 8064)
+        self.assertEqual(round_to_divisor(8200, 128), 8192)
+        # Nearest rounding would produce 8192; floor must keep 8064.
+        self.assertEqual(round_to_divisor(8150, 128), 8064)
+
+    def test_prune_neuron_pairs_raises_when_not_effective(self):
+        """Test tiny pruning that keeps base size raises an error."""
+        with self.assertRaises(ValueError) as context:
+            prune_neuron_pairs(
+                self.mlp,
+                prune_percentage=0.01,
+                expansion_divisor=128,
+            )
+
+        self.assertIn("No effective pruning", str(context.exception))
 
 
 # ==============================================================================

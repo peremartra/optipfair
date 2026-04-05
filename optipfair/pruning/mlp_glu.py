@@ -374,22 +374,24 @@ IMPORTANCE_FUNCTIONS = {
 
 def round_to_divisor(value: int, divisor: int) -> int:
     """
-    Round value to the nearest multiple of divisor.
+    Round value down to the nearest multiple of divisor.
     
     Args:
         value: Value to round
         divisor: Divisor to round to
         
     Returns:
-        Rounded value (nearest multiple of divisor)
+        Rounded value (largest multiple of divisor <= value)
         
     Example:
         >>> round_to_divisor(8100, 128)
         8064
         >>> round_to_divisor(8200, 128)
         8192
+        >>> round_to_divisor(8150, 128)
+        8064
     """
-    return round(value / divisor) * divisor
+    return (value // divisor) * divisor
 
 def prune_neuron_pairs(
     mlp: nn.Module,
@@ -479,8 +481,7 @@ def prune_neuron_pairs(
     # Apply expansion_divisor rounding if specified
     if expansion_divisor is not None:
         k_rounded = round_to_divisor(k, expansion_divisor)
-        # Ensure we don't exceed original size or go below 1
-        k_rounded = min(k_rounded, original_intermediate_size)
+        # Ensure we keep at least one neuron
         k_rounded = max(k_rounded, 1)
         
         if k_rounded != k:
@@ -489,6 +490,15 @@ def prune_neuron_pairs(
                 f"(divisible by {expansion_divisor})"
             )
         k = k_rounded
+
+    # If user requested effective pruning, final size must be strictly smaller.
+    if prune_percentage > 0 and k >= original_intermediate_size:
+        layer_label = f"layer {layer_idx}" if layer_idx is not None else "current layer"
+        raise ValueError(
+            f"No effective pruning for {layer_label}: resulting intermediate size ({k}) is "
+            f">= base size ({original_intermediate_size}). Increase pruning_percentage, "
+            f"decrease expansion_divisor, or disable expansion_divisor."
+        )
     
     # Validate the new size
     if k <= 0:

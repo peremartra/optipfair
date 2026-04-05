@@ -30,6 +30,8 @@ def cli():
               help='Percentage of neurons/layers to prune (0-100).')
 @click.option('--expansion-rate', default=None, type=float, 
               help='Target expansion rate in percentage (MLP_GLU only, mutually exclusive with pruning-percentage).')
+@click.option('--expansion-divisor', default=None, type=click.Choice(['32', '64', '128', '256']),
+              help='Round intermediate size down to a divisor (MLP_GLU only).')
 @click.option('--num-layers-to-remove', default=None, type=int, 
               help='Number of layers to remove (DEPTH only).')
 @click.option('--layer-indices', default=None, type=str, 
@@ -41,7 +43,8 @@ def cli():
 @click.option('--dtype', default='auto', type=click.Choice(['auto', 'float32', 'float16', 'bfloat16']), 
               help='Data type to load the model with.')
 @click.option('--verbose/--quiet', default=True, help='Whether to show verbose output.')
-def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate, 
+def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
+        expansion_divisor,
           num_layers_to_remove, layer_indices, layer_selection_method,
           output_path, device, dtype, verbose):
     """Prune a language model using the specified parameters."""
@@ -51,6 +54,9 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
     
     # Validate inputs based on pruning type
     if pruning_type == 'MLP_GLU':
+        if expansion_divisor is not None:
+            expansion_divisor = int(expansion_divisor)
+
         if pruning_percentage is not None and expansion_rate is not None:
             raise click.UsageError("--pruning-percentage and --expansion-rate are mutually exclusive.")
         
@@ -73,6 +79,9 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
                 raise click.UsageError("--layer-indices must be comma-separated integers (e.g., '2,5,8').")
     
     elif pruning_type == 'DEPTH':
+        if expansion_divisor is not None:
+            raise click.UsageError("--expansion-divisor is only valid with --pruning-type MLP_GLU.")
+
         # Count how many depth pruning parameters are specified
         depth_params = [p for p in [num_layers_to_remove, layer_indices, pruning_percentage] if p is not None]
         
@@ -146,20 +155,27 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
             logger.info(f"Target: {pruning_percentage}% reduction in neurons")
         else:
             logger.info(f"Target: {expansion_rate}% expansion rate")
+
+        if expansion_divisor is not None:
+            logger.info(f"Applying expansion divisor: {expansion_divisor}")
         
         if parsed_layer_indices is not None:
             logger.info(f"Selective pruning: targeting layers {parsed_layer_indices}")
         
-        pruned_model, stats = prune_model(
-            model=model,
-            pruning_type=pruning_type,
-            neuron_selection_method=method,
-            pruning_percentage=pruning_percentage,
-            expansion_rate=expansion_rate,
-            layer_indices=parsed_layer_indices,
-            show_progress=verbose,
-            return_stats=True,
-        )
+        try:
+            pruned_model, stats = prune_model(
+                model=model,
+                pruning_type=pruning_type,
+                neuron_selection_method=method,
+                pruning_percentage=pruning_percentage,
+                expansion_rate=expansion_rate,
+                expansion_divisor=expansion_divisor,
+                layer_indices=parsed_layer_indices,
+                show_progress=verbose,
+                return_stats=True,
+            )
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
     
     elif pruning_type == 'DEPTH':
         logger.info(f"Pruning model with {pruning_type} pruning, {layer_selection_method} layer selection method")

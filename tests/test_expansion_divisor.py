@@ -275,6 +275,17 @@ class TestExpansionDivisorEdgeCases:
             intermediate_size = pruned_model.model.layers[0].mlp.gate_proj.out_features
             assert intermediate_size % 32 == 0
 
+    def test_tiny_pruning_with_divisor_raises_no_effective_pruning(self, small_model):
+        """Test tiny pruning with divisor fails if resulting size is not reduced."""
+        with pytest.raises(ValueError, match="No effective pruning"):
+            prune_model(
+                model=small_model,
+                pruning_type="MLP_GLU",
+                pruning_percentage=0.01,
+                expansion_divisor=128,
+                show_progress=False,
+            )
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
