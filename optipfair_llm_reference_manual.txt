@@ -260,6 +260,155 @@ optipfair prune \
   --output-path ./pruned-model
 ```
 
+### Knowledge Distillation
+
+OptiPFair provides a public Python API for knowledge distillation via `opf.distill_model`, implemented in `optipfair/distillation/trainer.py`.
+
+#### Function Signature
+
+```python
+import optipfair as opf
+
+trained_student = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=dataloader,
+    layer_mapping_strategy="uniform",
+    alpha=0.6,
+    beta=0.4,
+    gamma=0.0,
+    delta=0.0,
+    temperature=2.0,
+    skew_alpha=0.4,
+    epochs=3,
+    learning_rate=4e-5,
+    scheduler="cosine",
+    warmup_ratio=0.05,
+    accumulation_steps=4,
+    show_progress=True,
+    return_stats=False,
+)
+```
+
+#### Parameters
+
+**Core models and data:**
+- `student_model`: PreTrainedModel to train (weights are updated in-place).
+- `teacher_model`: PreTrainedModel as distillation target (must be a different object than student).
+- `dataloader`: DataLoader yielding batches with `input_ids` (and optionally `attention_mask`). Labels are derived internally as `input_ids.clone()`.
+
+**Loss weights** (at least one must be > 0):
+- `alpha` (0.6): Hard labels (task) loss weight — cross-entropy on ground truth.
+- `beta` (0.4): Soft labels (logits) loss weight — skewed KL divergence at `temperature`.
+- `gamma` (0.0): Feature alignment loss weight — cosine similarity of hidden states. Activates layer mapping.
+- `delta` (0.0): Feature dynamics loss weight — cosine similarity of consecutive hidden-state deltas.
+
+**Distillation hyperparameters:**
+- `temperature` (2.0): Softening factor for logits distillation.
+- `skew_alpha` (0.4): Interpolation factor between student and teacher soft targets.
+- `layer_mapping_strategy` ("uniform"): `"uniform"` (proportional) or `"last"` (deepest layers). Used only when `gamma > 0` or `delta > 0`.
+
+**Training configuration:**
+- `epochs` (3): Training epochs.
+- `learning_rate` (4e-5): AdamW optimizer learning rate.
+- `scheduler` ("cosine"): `"cosine"` (linear warmup + cosine annealing) or `"none"`.
+- `warmup_ratio` (0.05): Fraction of total steps for linear warmup; must be in [0.0, 1.0].
+- `accumulation_steps` (4): Gradient accumulation steps; effective batch = `dataloader.batch_size × accumulation_steps`.
+- `show_progress` (True): Enable tqdm progress bars.
+- `return_stats` (False): If True, returns `(trained_model, stats_dict)` instead of just the model.
+
+#### Validation Constraints
+
+Raises `ValueError` if:
+- `alpha + beta + gamma + delta == 0`.
+- `student_model is teacher_model`.
+- `layer_mapping_strategy` not in `{"uniform", "last"}`.
+- `scheduler` not in `{"cosine", "none"}`.
+- `warmup_ratio` outside `[0.0, 1.0]`.
+- `accumulation_steps <= 0`.
+- Batch does not contain `input_ids`.
+
+Issues `UserWarning` if `gamma > 0` or `delta > 0` and loss weights do not sum to 1.0.
+
+#### Implementation Notes
+
+- **Cache management**: `use_cache` is disabled on both models during training (prevents index errors after depth pruning) and restored to original values on exit.
+- **Gradient clipping**: `max_norm=1.0` is applied before every optimizer step.
+- **Scheduler**: When `scheduler="cosine"`, uses `SequentialLR(LinearLR warmup → CosineAnnealingLR)` with `eta_min=learning_rate * 0.05`.
+- **Effective batch size**: `dataloader.batch_size * accumulation_steps` (included in stats when `return_stats=True`).
+
+#### Return Stats (`return_stats=True`)
+
+Returns `(trained_student, stats)` where `stats` contains:
+
+```python
+{
+    "epochs": int,
+    "learning_rate": float,
+    "accumulation_steps": int,
+    "effective_batch_size": int | None,   # dataloader.batch_size * accumulation_steps
+    "alpha": float,
+    "beta": float,
+    "gamma": float,
+    "delta": float,
+    "temperature": float,
+    "skew_alpha": float,
+    "layer_mapping_strategy": str | None,
+    "layer_map_used": list[int] | None,
+    "loss_history": {
+        "total": list[float],
+        "task": list[float],
+        "logits": list[float],
+        "trajectory": list[float],
+        "derivative": list[float],
+    },
+    "epoch_times_seconds": list[float],
+    "total_time_seconds": float,
+    "avg_time_per_epoch": float,
+}
+```
+
+#### Example
+
+```python
+import torch
+import optipfair as opf
+from torch.utils.data import DataLoader, TensorDataset
+from transformers import AutoModelForCausalLM
+
+teacher_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3.5-0.8B-Base")
+student_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3.5-0.8B-Base")
+
+# Tokenized training data
+input_ids = torch.randint(low=0, high=32000, size=(64, 256))
+attention_mask = torch.ones_like(input_ids)
+dataset = TensorDataset(input_ids, attention_mask)
+train_dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+
+trained_student, stats = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=train_dataloader,
+    alpha=0.6,
+    beta=0.4,
+    gamma=0.0,
+    delta=0.0,
+    temperature=2.0,
+    skew_alpha=0.4,
+    epochs=3,
+    learning_rate=4e-5,
+    scheduler="cosine",
+    warmup_ratio=0.05,
+    accumulation_steps=4,
+    show_progress=True,
+    return_stats=True,
+)
+
+print("Final total loss:", stats["loss_history"]["total"][-1])
+print("Total training time (s):", stats["total_time_seconds"])
+print("Effective batch size:", stats["effective_batch_size"])
+```
+
 ### Neuron Selection Methods
 
 OptiPFair supports four methods for calculating neuron importance (used with MLP_GLU pruning only):
@@ -1687,7 +1836,7 @@ According to the roadmap, OptiPFair has several planned extensions:
 - **Configuration Presets**: Pre-optimized pruning configurations
 - **Distributed Pruning**: Support for pruning very large models
 - **Dynamic Pruning**: Runtime pruning based on inference context
-- **Knowledge Distillation**: Integration with knowledge distillation
+- **Knowledge Distillation**: Python API available (`opf.distill_model`); future work includes CLI integration and extended KD recipes ✓
 - **Automated Pruning**: Algorithms to determine optimal pruning parameters
 - **NO GLU Models**: Implement pruning techniques for older models (no GLU)
 - **Comprehensive Benchmarks**: Add integration with common LLM benchmarks
