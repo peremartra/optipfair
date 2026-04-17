@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: optipfair
-Version: 0.3.0
+Version: 0.4.0
 Summary: A library for structured pruning & Bias visualization of large language models
 Home-page: https://github.com/peremartra/optipfair
 Author: Pere Martra
@@ -14,10 +14,11 @@ Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: torch>=1.10.0
+Requires-Dist: torch>1.11.0
 Requires-Dist: transformers>=4.25.0
 Requires-Dist: tqdm>=4.62.0
 Requires-Dist: click>=8.0.0
+Requires-Dist: numpy>=1.20.0
 Provides-Extra: dev
 Requires-Dist: pytest>=7.0.0; extra == "dev"
 Requires-Dist: black>=22.0.0; extra == "dev"

@@ -1,7 +1,8 @@
-torch>=1.10.0
+torch>1.11.0
 transformers>=4.25.0
 tqdm>=4.62.0
 click>=8.0.0
+numpy>=1.20.0
 
 [dev]
 pytest>=7.0.0

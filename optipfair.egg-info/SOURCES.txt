@@ -10,6 +10,7 @@ docs/contributing.md
 docs/examples.md
 docs/index.md
 docs/installation.md
+docs/knowledge_distillation.md
 docs/neuron-bias-fairness-pruning-spec.md
 docs/roadmap.md
 docs/usage.md
@@ -29,6 +30,10 @@ optipfair/bias/utils.py
 optipfair/bias/visualization.py
 optipfair/cli/__init__.py
 optipfair/cli/commands.py
+optipfair/distillation/__init__.py
+optipfair/distillation/loss.py
+optipfair/distillation/mapping.py
+optipfair/distillation/trainer.py
 optipfair/evaluation/__init__.py
 optipfair/evaluation/benchmarks.py
 optipfair/pruning/__init__.py
