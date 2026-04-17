@@ -29,6 +29,7 @@ nav:
   - Getting Started:
     - Installation: installation.md
     - Usage: usage.md
+  - Knowledge Distillation: knowledge_distillation.md
   - Examples: examples.md
   - Bias Visualization: bias_visualization.md
   - API Reference: api.md

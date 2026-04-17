@@ -17,7 +17,7 @@ This example demonstrates how to prune a LLaMA model using the default settings:
 ```python
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from optipfair import prune_model
+import optipfair as opf
 
 # Load model and tokenizer
 model_name = "meta-llama/Llama-3.2-1B"
@@ -38,7 +38,7 @@ original_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
 print(f"Original model output: {original_output}")
 
 # Apply pruning with default settings (10% pruning, PPM method)
-pruned_model = prune_model(model)
+pruned_model = opf.prune_model(model)
 
 # Get pruned parameter count
 pruned_params = sum(p.numel() for p in pruned_model.parameters())
@@ -54,6 +54,39 @@ print(f"Pruned model output: {pruned_output}")
 pruned_model.save_pretrained("./pruned-llama")
 tokenizer.save_pretrained("./pruned-llama")
 ```
+
+## Knowledge Distillation Example (v0.4.0+)
+
+Use KD to recover student quality after pruning.
+
+```python
+import optipfair as opf
+
+trained_student, stats = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=dataloader,
+    alpha=0.6,
+    beta=0.4,
+    gamma=0.0,
+    delta=0.0,
+    temperature=2.0,
+    skew_alpha=0.4,
+    epochs=3,
+    learning_rate=4e-5,
+    scheduler="cosine",
+    warmup_ratio=0.05,
+    accumulation_steps=4,
+    return_stats=True,
+)
+
+print("Final loss:", stats["loss_history"]["total"][-1])
+```
+
+Notebook examples:
+
+- [knowledge_distillation.ipynb](https://github.com/peremartra/optipfair/blob/main/examples/knowledge_distillation.ipynb)
+- [knowledge_distillation_express.ipynb](https://github.com/peremartra/optipfair/blob/main/examples/knowledge_distillation_express.ipynb)
 
 ## Bias Visualization Example
 

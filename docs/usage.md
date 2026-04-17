@@ -16,14 +16,14 @@ OptiPFair provides a simple Python API for pruning models.
 ### Basic Usage
 
 ```python
+import optipfair as opf
 from transformers import AutoModelForCausalLM
-from optipfair import prune_model
 
 # Load a pre-trained model
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 
 # Prune the model with default settings (10% pruning, PPM method)
-pruned_model = prune_model(model=model)
+pruned_model = opf.prune_model(model=model)
 
 # Save the pruned model
 pruned_model.save_pretrained("./pruned-model")
@@ -32,8 +32,10 @@ pruned_model.save_pretrained("./pruned-model")
 ### Advanced Usage
 
 ```python
+import optipfair as opf
+
 # Prune with custom settings
-pruned_model, stats = prune_model(
+pruned_model, stats = opf.prune_model(
     model=model,
     pruning_type="MLP_GLU",              # Type of pruning to apply
     neuron_selection_method="MAW",       # Method to calculate neuron importance
@@ -48,6 +50,34 @@ print(f"Original parameters: {stats['original_parameters']:,}")
 print(f"Pruned parameters: {stats['pruned_parameters']:,}")
 print(f"Reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)")
 ```
+
+## Knowledge Distillation (Available from v0.4.0)
+
+OptiPFair provides KD via Python API using `import optipfair as opf` and `opf.distill_model`.
+
+```python
+import optipfair as opf
+
+trained_student, stats = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=dataloader,
+    alpha=0.6,
+    beta=0.4,
+    gamma=0.0,
+    delta=0.0,
+    temperature=2.0,
+    skew_alpha=0.4,
+    epochs=3,
+    learning_rate=4e-5,
+    scheduler="cosine",
+    warmup_ratio=0.05,
+    accumulation_steps=4,
+    return_stats=True,
+)
+```
+
+See the full guide in [Knowledge Distillation](knowledge_distillation.md).
 
 ## Command-Line Interface
 

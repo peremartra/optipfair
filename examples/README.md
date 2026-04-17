@@ -39,6 +39,12 @@
 - [**Complete Pruning Script**](prune_llama.py)  
   Production-ready Python script with benchmarking, text generation testing, and model saving. Everything you need for a full pruning pipeline.
 
+- [**Knowledge Distillation (Standard)**](knowledge_distillation.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/knowledge_distillation.ipynb)  
+  Distill a student model with full control over loss weights, scheduler, and training statistics.
+
+- [**Knowledge Distillation (Express)**](knowledge_distillation_express.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/knowledge_distillation_express.ipynb)  
+  Fast KD workflow for quick experiments with practical defaults.
+
 
 ## Installation
 

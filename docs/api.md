@@ -84,6 +84,97 @@ def prune_model(
     """
 ```
 
+### `distill_model` (Available from v0.4.0)
+
+```python
+import optipfair as opf
+
+def distill_model(
+    student_model: PreTrainedModel,
+    teacher_model: PreTrainedModel,
+    dataloader: DataLoader,
+    layer_mapping_strategy: str = "uniform",
+    alpha: float = 0.6,
+    beta: float = 0.4,
+    gamma: float = 0.0,
+    delta: float = 0.0,
+    temperature: float = 2.0,
+    skew_alpha: float = 0.4,
+    epochs: int = 3,
+    learning_rate: float = 4e-5,
+    scheduler: str = "cosine",
+    warmup_ratio: float = 0.05,
+    accumulation_steps: int = 4,
+    show_progress: bool = True,
+    return_stats: bool = False,
+) -> Union[PreTrainedModel, Tuple[PreTrainedModel, Dict]]:
+    """
+    Distill a student model from a teacher model using compound losses.
+
+    Args:
+        student_model: Student model to train (updated in place)
+        teacher_model: Teacher model used as distillation target
+        dataloader: Training dataloader yielding token batches
+        layer_mapping_strategy: "uniform" or "last"
+        alpha: Hard labels loss weight
+        beta: Soft logits loss weight
+        gamma: Hidden-state trajectory loss weight
+        delta: Hidden-state derivative loss weight
+        temperature: Distillation temperature
+        skew_alpha: Interpolation factor for soft target distribution
+        epochs: Number of training epochs
+        learning_rate: Optimizer learning rate
+        scheduler: "cosine" or "none"
+        warmup_ratio: Warmup fraction in [0.0, 1.0]
+        accumulation_steps: Gradient accumulation steps (> 0)
+        show_progress: Whether to show progress bars
+        return_stats: Whether to return `(trained_model, stats)`
+
+    Returns:
+        Trained student model, or `(trained_model, stats_dict)` when
+        `return_stats=True`.
+
+    Raises:
+        ValueError: If validation constraints are not met.
+    """
+```
+
+Example:
+
+```python
+import optipfair as opf
+
+trained_student, stats = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=dataloader,
+    alpha=0.6,
+    beta=0.4,
+    gamma=0.0,
+    delta=0.0,
+    temperature=2.0,
+    skew_alpha=0.4,
+    epochs=3,
+    learning_rate=4e-5,
+    scheduler="cosine",
+    warmup_ratio=0.05,
+    accumulation_steps=4,
+    return_stats=True,
+)
+```
+
+Validation constraints:
+
+- `alpha + beta + gamma + delta` must not be zero
+- `student_model` and `teacher_model` must be different objects
+- `layer_mapping_strategy` must be `"uniform"` or `"last"`
+- `scheduler` must be `"cosine"` or `"none"`
+- `warmup_ratio` must be in `[0.0, 1.0]`
+- `accumulation_steps` must be greater than `0`
+- Each batch must contain `input_ids`
+
+See also: [Knowledge Distillation](knowledge_distillation.md)
+
 ## Bias Visualization Module
 
 ### `visualize_bias`

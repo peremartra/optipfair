@@ -28,10 +28,11 @@ This document outlines the planned features and improvements for OptiPFair.
 
 ## Long-term Goals (6+ months)
 
-### Version 0.4.0
+### Version 0.4.0 (Released - April 2026) ✅
 
-- **Configuration Presets**: Provide optimized pruning configurations for different model families
-- **Visualization Tools**: Add tools for visualizing neuron importance and pruning impact
+- **Knowledge Distillation**: `opf.distill_model()` available — recover student quality after pruning with teacher guidance (closes #21)
+- **Width Pruning Fix**: Model size can no longer increase when combining `expansion_divisor` with small pruning percentages (closes #27)
+- **Depth Pruning Config Sync**: `prune_model_depth()` now correctly syncs `config.layer_types` for hybrid architectures like Qwen3.5 (closes #20)
 
 ### Version 0.5.0
 - **Fairness prunning**: consider bias in pruning. 
@@ -39,7 +40,6 @@ This document outlines the planned features and improvements for OptiPFair.
 ### Version 1.0.0
 - **Distributed Pruning**: Support for pruning very large models across multiple GPUs
 - **Dynamic Pruning**: Techniques for runtime pruning based on inference context
-- **Knowledge Distillation**: Integration with knowledge distillation techniques
 - **Non-transformer Models**: Extend support to other model architectures
 - **Automated Pruning**: Implement algorithms to automatically determine optimal pruning parameters
 - **Iterative Pruning**: Support for gradual pruning over multiple iterations

@@ -24,6 +24,7 @@ Understanding bias in language models is crucial for:
 - **GLU Architecture-Aware Pruning**: Maintains the paired nature of gate_proj and up_proj layers
 - **Depth Pruning**: Remove entire transformer layers for aggressive efficiency gains
 - **Layer Importance Analysis**: Analyze transformer layers using cosine similarity to inform pruning decisions
+- **Knowledge Distillation (v0.4.0+)**: Recover student quality after pruning with `opf.distill_model`
 - **Bias Visualization Tools**: Comprehensive analysis of how models process demographic attributes
 - **Quantitative Bias Metrics**: Numeric measurements for consistent evaluation
 - **Multiple Neuron Selection Methods**: PPM (Peak-to-Peak Magnitude), VOW, and PON for different pruning strategies
@@ -38,6 +39,7 @@ Understanding bias in language models is crucial for:
 
 - [Installation](installation.md): How to install OptiPFair
 - [Usage](usage.md): Basic usage examples for pruning
+- [Knowledge Distillation](knowledge_distillation.md): Distill student models with `import optipfair as opf`
 - [Bias Visualization](bias_visualization.md): Analyzing fairness in transformers
 - [API Reference](api.md): Detailed API documentation
 - [Examples](examples.md): In-depth examples and tutorials

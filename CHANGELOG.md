@@ -1,8 +1,45 @@
 ## [Unreleased]
 
-### 🔧 Compatibility
+---
 
-- Raised minimum PyTorch requirement to `>1.11.0`.
+## [0.4.0] - 2026-04-17
+
+### 🎉 New Features
+
+#### Knowledge Distillation (closes #21)
+- **New Function**: `opf.distill_model()` — full knowledge distillation pipeline for recovering student model quality after pruning
+  - Temperature-scaled logit distillation (KL divergence)
+  - Optional hidden-state matching loss (`beta` weight)
+  - Optional attention matching loss (`gamma` weight)
+  - Automatic layer mapping: `"uniform"` (spread student layers across teacher) or `"last"` (align to last N teacher layers)
+  - Integrated `SequentialLR` scheduler support
+  - Automatic device and dtype handling
+- **New Constants**: `MAPPING_UNIFORM`, `MAPPING_LAST` exported at package level for explicit mapping control
+- **Python API Only**: designed to follow a `prune_model` call to recover accuracy with teacher guidance
+
+#### Documentation & Examples
+- Dedicated Knowledge Distillation guide: `docs/knowledge_distillation.md`
+- Two new notebooks: `knowledge_distillation.ipynb` (full control) and `knowledge_distillation_express.ipynb` (quick start)
+
+### 🔧 Bug Fixes
+
+#### Width Pruning No Longer Increases Model Size (closes #27)
+- **Fixed**: Using `expansion_divisor` with a small `pruning_percentage` could produce a pruned model with *more* neurons than the original when divisor rounding cancelled the intended reduction
+- **Solution**: After computing the target neuron count, a strict validation check raises `ValueError` if the rounded value is ≥ the original intermediate size, surfacing the invalid parameter combination early with a clear message
+- **Impact**: All combinations of `pruning_percentage` + `expansion_divisor` now either produce a strictly smaller model or raise an explicit error
+
+### 🔧 Technical Improvements
+
+#### Depth Pruning Syncs `config.layer_types` After Pruning (closes #20)
+- **Fixed**: `prune_model_depth()` did not update `model.config.layer_types` after removing layers
+- **Problem**: Hybrid-architecture models (e.g., Qwen3.5 with GatedDeltaNet SSM blocks) allocate KV-cache buffers based on `config.layer_types`; a stale list caused `IndexError` during inference on the pruned model
+- **Solution**:
+  - `config.layer_types` entries are now removed in *reverse index order* after depth pruning, preventing index-shift corruption
+  - `layer_idx` attributes on remaining layers are reassigned to match their new positions
+- **Impact**: Depth pruning now works correctly with hybrid SSM/attention architectures
+
+### 🧪 Testing & Quality
+- All existing tests remain passing; no breaking changes to the public API
 
 ---
 
