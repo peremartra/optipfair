@@ -17,8 +17,11 @@
   <a href="https://github.com/peremartra/optipfair/issues">Report Bug</a>
   ·
   <a href="https://github.com/peremartra/optipfair/issues">Request Feature</a>
+  
 </div>
 
+
+>**Companion Library:** OptiPFair is the official open-source implementation for the upcoming Manning book **[Rearchitecting LLMs](https://hubs.la/Q040tvsK0)**. Explore the theory, mechanics, and advanced research behind these algorithms in the [book's repository](https://github.com/peremartra/Rearchitecting-LLMs).
 ---
 
 ## The Pipeline
@@ -78,11 +81,12 @@ student = opf.prune_model_depth(model, layer_indices=[21, 20, 9, 8, 17])
 | Metric          | Teacher | Student (KD) |
 |-----------------|---------|--------------|
 | Layers          | 24      | 14           |
-| Parameters      | 752M    | **540M**     |
-| Reduction       | —       | **−28.2%**   |
+| Parameters      | 752M    | **540M** |
+| Reduction       | —       | **−28.2%** |
 | Winogrande      | 59.4%   | 54.8%        |
 | PIQA            | 71.5%   | 64.5%        |
 | Avg Benchmark   | 60.8%   | 48.9%        |
+| **Performance Retention** | **100%** | **80.4%** |
 
 Also validated on **Llama-3.2-3B**.
 
@@ -143,8 +147,8 @@ pip install optipfair[viz]
 
 | Notebook | Description | Link |
 |----------|-------------|------|
-| **Knowledge Distillation** | Full pipeline: prune → distill → push to HF → lm_eval benchmarks → VRAM comparison | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](<!-- ADD LINK -->) |
-| **Knowledge Distillation Express** | Compact distillation loop with lm_eval benchmarks | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](<!-- ADD LINK -->) |
+| **Knowledge Distillation** | Full pipeline: prune → distill → push to HF → lm_eval benchmarks → VRAM comparison | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/knowledge_distillation.ipynb) |
+| **Knowledge Distillation Express** | Compact distillation loop with lm_eval benchmarks | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/knowledge_distillation_express.ipynb) |
 | **Depth Pruning** | Remove entire transformer layers from models like Llama-3 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/depth_pruning.ipynb) |
 | **Layer Importance Analysis** | Identify which layers contribute least to model performance | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/layer_importance_analysis.ipynb) |
 
