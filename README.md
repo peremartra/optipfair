@@ -40,21 +40,47 @@ You can apply **depth pruning** (remove entire layers), **width pruning** (reduc
 ```python
 import optipfair as opf
 
-# Step 1 — Find the least important layers (data-driven)
+# 1. Analyze layer importance (returns a Dict[int, float])
+# Higher scores indicate layers that significantly transform representations, 
+# while lower scores suggest "passive" layers that are candidates for removal[cite: 111, 114].
 importance = opf.analyze_layer_importance(model, dataloader)
 
-# Step 2a — Depth pruning: remove the weakest layers entirely
-model = opf.prune_model_depth(model, layer_indices=[21, 20, 9, 8, 17])
+# 2. Dynamically identify the N least important layers
+# We sort the layers by their importance score in ascending order[cite: 113, 114].
+n_layers_to_remove = 5
+sorted_layers = sorted(importance.items(), key=lambda x: x[1])
+least_important_indices = [idx for idx, score in sorted_layers[:n_layers_to_remove]]
 
-# Step 2b — Width pruning: reduce neuron count inside each layer
-model = opf.prune_model(model, pruning_ratio=0.2, method="PPM")
+print(f"Targeting layers for removal: {least_important_indices}")
 
-# Step 3 — Recover performance via knowledge distillation
-trained_model, stats = opf.distill_model(
+# 3a. Depth Pruning: Remove the identified "passive" layers entirely[cite: 16].
+# This reduces model latency and memory footprint[cite: 11].
+model, depth_stats = opf.prune_model(
+    model=model, 
+    pruning_type="DEPTH", 
+    layer_indices=least_important_indices,
+    return_stats=True
+)
+
+# 3b. Width Pruning: Reduce neuron count in the remaining GLU MLP layers.
+# We use the PPM (Peak-to-Peak Magnitude) method, which is the most effective for GLU[cite: 5].
+model, width_stats = opf.prune_model(
+    model=model, 
+    pruning_type="MLP_GLU",
+    pruning_percentage=20, 
+    neuron_selection_method="MAW", # "MAW" is the alias for PPM[cite: 8, 53].
+    return_stats=True
+)
+
+# 4. Performance Recovery: Fine-tune the student model using Knowledge Distillation[cite: 25].
+# This process updates the student weights in-place to match the teacher's behavior[cite: 26].
+trained_model, distill_stats = opf.distill_model(
     student_model=model,
     teacher_model=teacher,
     dataloader=train_dataloader,
     epochs=4,
+    alpha=0.6,  # Weight for task-specific loss[cite: 29].
+    beta=0.4,   # Weight for soft label (logits) loss[cite: 30].
     return_stats=True,
 )
 ```
