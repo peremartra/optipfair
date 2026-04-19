@@ -41,20 +41,16 @@ You can apply **depth pruning** (remove entire layers), **width pruning** (reduc
 import optipfair as opf
 
 # 1. Analyze layer importance (returns a Dict[int, float])
-# Higher scores indicate layers that significantly transform representations, 
-# while lower scores suggest "passive" layers that are candidates for removal[cite: 111, 114].
 importance = opf.analyze_layer_importance(model, dataloader)
 
 # 2. Dynamically identify the N least important layers
-# We sort the layers by their importance score in ascending order[cite: 113, 114].
 n_layers_to_remove = 5
 sorted_layers = sorted(importance.items(), key=lambda x: x[1])
 least_important_indices = [idx for idx, score in sorted_layers[:n_layers_to_remove]]
 
 print(f"Targeting layers for removal: {least_important_indices}")
 
-# 3a. Depth Pruning: Remove the identified "passive" layers entirely[cite: 16].
-# This reduces model latency and memory footprint[cite: 11].
+# 3a. Depth Pruning: Remove the identified "passive" layers entirely.
 model, depth_stats = opf.prune_model(
     model=model, 
     pruning_type="DEPTH", 
@@ -63,7 +59,6 @@ model, depth_stats = opf.prune_model(
 )
 
 # 3b. Width Pruning: Reduce neuron count in the remaining GLU MLP layers.
-# We use the PPM (Peak-to-Peak Magnitude) method, which is the most effective for GLU[cite: 5].
 model, width_stats = opf.prune_model(
     model=model, 
     pruning_type="MLP_GLU",
@@ -72,8 +67,7 @@ model, width_stats = opf.prune_model(
     return_stats=True
 )
 
-# 4. Performance Recovery: Fine-tune the student model using Knowledge Distillation[cite: 25].
-# This process updates the student weights in-place to match the teacher's behavior[cite: 26].
+# 4. Performance Recovery: Fine-tune the student model using Knowledge Distillation.
 trained_model, distill_stats = opf.distill_model(
     student_model=model,
     teacher_model=teacher,
