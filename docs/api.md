@@ -565,6 +565,41 @@ def compute_neuron_pair_importance_l2(gate_weight: torch.Tensor, up_weight: torc
     """
 ```
 
+#### `zero_neurons_mlp`
+
+```python
+def zero_neurons_mlp(
+    model: PreTrainedModel,
+    neuron_indices: Dict[int, List[int]],
+    show_progress: bool = True,
+) -> PreTrainedModel:
+    """
+    Set specific MLP neuron weights to zero in a GLU architecture model.
+
+    For each neuron index i in a layer, zeroes out:
+    - Row i of gate_proj.weight (and gate_proj.bias if present)
+    - Row i of up_proj.weight (and up_proj.bias if present)
+    - Column i of down_proj.weight
+
+    The model architecture and dimensions are NOT changed.
+
+    Args:
+        model: Pre-trained model with GLU MLP layers
+        neuron_indices: Dict mapping layer indices to lists of neuron indices to zero.
+            Keys are int layer indices (0-based). Values are lists of int neuron indices
+            within [0, intermediate_size - 1]. Example: {0: [10, 42], 5: [100, 203]}
+        show_progress: Whether to show a progress bar
+
+    Returns:
+        model: The same model with specified neuron weights zeroed in-place
+
+    Raises:
+        ValueError: If the model is not compatible with GLU pruning
+        TypeError: If neuron_indices is not a Dict[int, List[int]]
+        ValueError: If any layer or neuron index is out of range
+    """
+```
+
 ### Depth Pruning
 
 #### `prune_model_depth`

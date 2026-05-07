@@ -1703,6 +1703,77 @@ for layer_idx, layer_scores in fairness_scores.items():
     print(f"Layer {layer_idx}: Identified {len(neurons_to_prune)} neurons to prune based on fairness")
 ```
 
+### Step 4: Neuron Zeroing (zero_neurons_mlp)
+
+`zero_neurons_mlp` silences specific neurons by setting their weights to zero **without
+removing them from the model**. Unlike `prune_model_mlp_glu`, which physically reduces
+layer dimensions, this is a non-destructive operation: the architecture and parameter
+count remain unchanged, but the selected neurons produce no contribution to the output.
+
+**Signature:**
+```python
+from optipfair.pruning import zero_neurons_mlp
+
+model = zero_neurons_mlp(
+    model=model,
+    neuron_indices=neuron_indices,  # Dict[int, List[int]]
+    show_progress=True,
+)
+```
+
+**What gets zeroed for each neuron i:**
+- `gate_proj.weight[i, :]` and `gate_proj.bias[i]` (if bias exists)
+- `up_proj.weight[i, :]` and `up_proj.bias[i]` (if bias exists)
+- `down_proj.weight[:, i]`
+
+**Example 1: Manual index selection**
+```python
+from optipfair.pruning import zero_neurons_mlp
+
+# Silence neurons 10, 42 in layer 0 and neurons 100, 203 in layer 5
+neuron_indices = {0: [10, 42], 5: [100, 203]}
+model = zero_neurons_mlp(model, neuron_indices=neuron_indices)
+```
+
+**Example 2: Driven by fairness scores from compute_fairness_pruning_scores**
+```python
+from optipfair.bias import analyze_neuron_bias, compute_fairness_pruning_scores
+from optipfair.pruning import zero_neurons_mlp
+
+# Step 1: Compute bias scores
+bias_scores = analyze_neuron_bias(
+    model=model,
+    tokenizer=tokenizer,
+    prompt_pairs=prompt_pairs,
+)
+
+# Step 2: Compute combined fairness scores per layer
+# Returns Dict[int, Tensor[intermediate_size]] — scores in [0, 1]
+# High score = strong pruning candidate (high bias + low importance)
+fairness_scores = compute_fairness_pruning_scores(
+    model=model,
+    bias_scores=bias_scores,
+    bias_weight=0.5,
+)
+
+# Step 3: Convert scores to indices using a threshold
+threshold = 0.7  # Zero neurons with fairness score > threshold
+neuron_indices = {
+    layer_idx: scores.gt(threshold).nonzero(as_tuple=True)[0].tolist()
+    for layer_idx, scores in fairness_scores.items()
+    if scores.gt(threshold).any()
+}
+
+# Step 4: Zero selected neurons
+model = zero_neurons_mlp(model, neuron_indices=neuron_indices, show_progress=True)
+```
+
+**Validation constraints:**
+- `neuron_indices` must be a non-empty `Dict[int, List[int]]`
+- Layer indices must be in range `[0, num_layers - 1]`
+- Neuron indices must be in range `[0, intermediate_size - 1]`
+- No duplicate neuron indices within a layer
+
 ### Complete Example: End-to-End Fairness-Aware Pruning
 
 ```python

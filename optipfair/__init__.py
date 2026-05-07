@@ -9,7 +9,7 @@ import logging
 from typing import Optional, Union, Dict, Any
 from transformers import PreTrainedModel
 
-from .pruning.mlp_glu import prune_model_mlp_glu
+from .pruning.mlp_glu import prune_model_mlp_glu, zero_neurons_mlp
 from .pruning.depth import prune_model_depth, analyze_layer_importance
 from .distillation import distill_model
 from .distillation.mapping import (

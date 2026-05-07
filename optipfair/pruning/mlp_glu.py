@@ -807,3 +807,129 @@ def prune_model_mlp_glu(
         logger.info(f"Updated model config: intermediate_size = {new_intermediate_size}")
     
     return model
+
+
+# ==============================================================================
+# NEURON ZEROING
+# ==============================================================================
+
+def zero_neurons_mlp(
+    model: PreTrainedModel,
+    neuron_indices: Dict[int, List[int]],
+    show_progress: bool = True,
+) -> PreTrainedModel:
+    """
+    Set specific MLP neuron weights to zero in a GLU architecture model.
+
+    For each neuron index i in a layer, zeroes out:
+    - Row i of gate_proj.weight (and gate_proj.bias if present)
+    - Row i of up_proj.weight (and up_proj.bias if present)
+    - Column i of down_proj.weight
+
+    The model architecture and dimensions are NOT changed. This is a soft
+    operation that silences neurons without altering the model structure,
+    making it reversible by saving/restoring weights.
+
+    Args:
+        model: Pre-trained model with GLU MLP layers (LLaMA, Mistral, etc.)
+        neuron_indices: Dictionary mapping layer indices to lists of neuron indices
+            to zero out. Keys are integer layer indices (0-based). Values are lists
+            of integer neuron indices within [0, intermediate_size - 1].
+            Example: {0: [10, 42], 5: [100, 203]}
+        show_progress: Whether to show a progress bar over the layers being modified.
+
+    Returns:
+        model: The same model with specified neuron weights zeroed in-place.
+
+    Raises:
+        ValueError: If the model is not compatible with GLU pruning.
+        TypeError: If neuron_indices is not a Dict[int, List[int]].
+        ValueError: If any layer index is out of range.
+        ValueError: If any neuron index is out of range for its layer.
+        ValueError: If neuron_indices is empty.
+
+    Example:
+        >>> from optipfair.pruning import zero_neurons_mlp
+        >>> neuron_indices = {0: [10, 42], 5: [100, 203]}
+        >>> model = zero_neurons_mlp(model, neuron_indices)
+    """
+    # Validate model compatibility
+    if not validate_model_for_glu_pruning(model):
+        raise ValueError(
+            "Model is not compatible with GLU pruning. "
+            "It must have gate_proj, up_proj, and down_proj layers."
+        )
+
+    # Validate neuron_indices type
+    if not isinstance(neuron_indices, dict):
+        raise TypeError(
+            f"neuron_indices must be Dict[int, List[int]], got {type(neuron_indices)}"
+        )
+
+    if not neuron_indices:
+        raise ValueError("neuron_indices cannot be empty")
+
+    layers = get_model_layers(model)
+    if not layers:
+        raise ValueError("Could not find MLP layers in the model.")
+
+    num_layers = len(layers)
+
+    # Validate all keys and values before doing any modification
+    for layer_idx, indices in neuron_indices.items():
+        if not isinstance(layer_idx, int):
+            raise TypeError(
+                f"neuron_indices keys must be int, got {type(layer_idx)} for key {layer_idx}"
+            )
+        if layer_idx < 0 or layer_idx >= num_layers:
+            raise ValueError(
+                f"Layer index {layer_idx} is out of range. "
+                f"Model has {num_layers} layers (valid indices: 0-{num_layers - 1})"
+            )
+        if not isinstance(indices, list):
+            raise TypeError(
+                f"neuron_indices values must be List[int], got {type(indices)} for layer {layer_idx}"
+            )
+        if not indices:
+            raise ValueError(f"Neuron index list for layer {layer_idx} cannot be empty")
+
+        intermediate_size = layers[layer_idx].mlp.gate_proj.out_features
+        invalid = [i for i in indices if i < 0 or i >= intermediate_size]
+        if invalid:
+            raise ValueError(
+                f"Layer {layer_idx}: neuron indices {invalid} are out of range "
+                f"[0, {intermediate_size - 1}]"
+            )
+        if len(indices) != len(set(indices)):
+            raise ValueError(f"Layer {layer_idx}: neuron_indices contains duplicate values")
+
+    # Apply zeroing
+    items = sorted(neuron_indices.items())
+    iterator = tqdm(items, desc="Zeroing neurons") if show_progress else items
+
+    for layer_idx, indices in iterator:
+        mlp = layers[layer_idx].mlp
+        idx_tensor = torch.tensor(indices, dtype=torch.long)
+
+        with torch.no_grad():
+            # Zero rows in gate_proj
+            mlp.gate_proj.weight.data[idx_tensor, :] = 0.0
+            if mlp.gate_proj.bias is not None:
+                mlp.gate_proj.bias.data[idx_tensor] = 0.0
+
+            # Zero rows in up_proj
+            mlp.up_proj.weight.data[idx_tensor, :] = 0.0
+            if mlp.up_proj.bias is not None:
+                mlp.up_proj.bias.data[idx_tensor] = 0.0
+
+            # Zero columns in down_proj
+            mlp.down_proj.weight.data[:, idx_tensor] = 0.0
+
+        logger.debug(f"Layer {layer_idx}: zeroed {len(indices)} neurons")
+
+    logger.info(
+        f"Zeroing complete: {sum(len(v) for v in neuron_indices.values())} neurons "
+        f"across {len(neuron_indices)} layers"
+    )
+
+    return model
