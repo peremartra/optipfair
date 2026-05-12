@@ -5,6 +5,7 @@ Tests for the distillation trainer module.
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 import torch
 from torch import nn
@@ -72,6 +73,30 @@ class DictDataset(torch.utils.data.Dataset):
         return {
             "input_ids": self.input_ids[idx],
             "attention_mask": self.attention_mask[idx],
+        }
+
+
+class DictDatasetWithLabels(torch.utils.data.Dataset):
+    """Dataset that yields dict batches including labels."""
+
+    def __init__(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        labels: torch.Tensor,
+    ):
+        self.input_ids = input_ids
+        self.attention_mask = attention_mask
+        self.labels = labels
+
+    def __len__(self):
+        return self.input_ids.size(0)
+
+    def __getitem__(self, idx):
+        return {
+            "input_ids": self.input_ids[idx],
+            "attention_mask": self.attention_mask[idx],
+            "labels": self.labels[idx],
         }
 
 
@@ -328,6 +353,77 @@ class TestDistillModelBatchFormats(unittest.TestCase):
             return_stats=True,
         )
         self.assertEqual(stats["epochs"], 1)
+
+
+class TestDistillModelLabelMasking(unittest.TestCase):
+
+    def setUp(self):
+        self.student = MockSmallModel(num_layers=4)
+        self.teacher = MockSmallModel(num_layers=6)
+
+    @staticmethod
+    def _fake_loss(**kwargs):
+        loss = kwargs["student_logits"].sum() * 0 + 1.0
+        loss_dict = {
+            "total": 1.0,
+            "task": 1.0,
+            "logits": 1.0,
+            "trajectory": 0.0,
+            "derivative": 0.0,
+        }
+        return loss, loss_dict
+
+    def test_respects_user_provided_labels(self):
+        input_ids = torch.tensor([[10, 11, 12, 13]])
+        attention_mask = torch.tensor([[1, 1, 0, 0]])
+        labels = torch.tensor([[90, 91, -100, -100]])
+        dataloader = DataLoader(
+            DictDatasetWithLabels(input_ids, attention_mask, labels),
+            batch_size=1,
+        )
+
+        with patch(
+            "optipfair.distillation.trainer.compute_distillation_loss",
+            side_effect=self._fake_loss,
+        ) as mocked_loss:
+            distill_model(
+                self.student,
+                self.teacher,
+                dataloader,
+                epochs=1,
+                show_progress=False,
+                accumulation_steps=1,
+                return_stats=False,
+            )
+
+        passed_labels = mocked_loss.call_args.kwargs["labels"]
+        self.assertTrue(torch.equal(passed_labels, labels))
+
+    def test_builds_masked_labels_from_attention_mask(self):
+        input_ids = torch.tensor([[20, 21, 22, 23]])
+        attention_mask = torch.tensor([[1, 1, 0, 0]])
+        dataloader = DataLoader(
+            DictDataset(input_ids, attention_mask),
+            batch_size=1,
+        )
+
+        with patch(
+            "optipfair.distillation.trainer.compute_distillation_loss",
+            side_effect=self._fake_loss,
+        ) as mocked_loss:
+            distill_model(
+                self.student,
+                self.teacher,
+                dataloader,
+                epochs=1,
+                show_progress=False,
+                accumulation_steps=1,
+                return_stats=False,
+            )
+
+        passed_labels = mocked_loss.call_args.kwargs["labels"]
+        expected_labels = torch.tensor([[20, 21, -100, -100]])
+        self.assertTrue(torch.equal(passed_labels.cpu(), expected_labels))
 
 
 class TestDistillModelLayerStrategy(unittest.TestCase):

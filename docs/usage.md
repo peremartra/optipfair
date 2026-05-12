@@ -807,7 +807,6 @@ bias_scores = analyze_neuron_bias(
     prompt_pairs=prompt_pairs,
     target_layers=["gate_proj", "up_proj"],  # Analyze these MLP components
     aggregation="mean",                       # "mean" or "max" across tokens
-    batch_size=4,
     show_progress=True
 )
 

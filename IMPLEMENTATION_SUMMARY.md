@@ -37,12 +37,11 @@ Successfully implemented all 3 specification changes from `neuron-bias-fairness-
 
 **Files Modified:**
 - [`optipfair/bias/activations.py`](optipfair/bias/activations.py)
-  - Added `analyze_neuron_bias(model, tokenizer, prompt_pairs, target_layers=None, aggregation="mean", batch_size=4)`
+  - Added `analyze_neuron_bias(model, tokenizer, prompt_pairs, target_layers=None, aggregation="mean", show_progress=True)`
   - Added `_normalize(scores)` helper function
 
 **Features:**
 - Processes list of prompt pairs: `List[Tuple[str, str]]`
-- Batch processing with configurable `batch_size` (default=4)
 - Handles asymmetric sequence lengths (padding with zeros for shorter sequences)
 - Two aggregation modes: `"mean"` and `"max"` across prompt pairs
 - Returns: `Dict[str, torch.Tensor]` with shape `[intermediate_size]` per layer
@@ -230,7 +229,6 @@ bias_scores = analyze_neuron_bias(
     prompt_pairs,
     target_layers=["gate_proj", "up_proj"],
     aggregation="mean",  # or "max"
-    batch_size=4
 )
 # Returns: {"gate_proj_layer_0": tensor([...]), "up_proj_layer_0": tensor([...]), ...}
 ```

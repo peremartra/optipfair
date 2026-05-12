@@ -46,6 +46,7 @@ def compute_distillation_loss(
         student_hiddens: Student hidden states, one tensor per aligned layer.
         teacher_hiddens: Teacher hidden states, one tensor per aligned layer.
         labels: Target token ids with shape [batch, seq_len].
+            Positions with value -100 are ignored as invalid tokens.
         layer_map: Teacher layer indices aligned to each student layer.
         alpha: Hard labels weight: learns from ground truth (dataset).
         beta: Soft labels weight: learns from teacher's output distribution.
@@ -77,6 +78,8 @@ def compute_distillation_loss(
         shift_labels.view(-1),
         ignore_index=-100,
     )
+    valid_mask = shift_labels != -100
+    num_valid = valid_mask.sum().clamp(min=1)
 
     with torch.no_grad():
         student_probs = F.softmax(student_logits[..., :-1, :] / temperature, dim=-1)
@@ -85,18 +88,22 @@ def compute_distillation_loss(
 
     student_log_probs = F.log_softmax(student_logits[..., :-1, :] / temperature, dim=-1)
     kl_elementwise = student_probs * (student_log_probs - torch.log(mixed_probs + 1e-9))
-    loss_logits = kl_elementwise.sum(dim=-1).mean() * (temperature ** 2)
+    kl_per_token = kl_elementwise.sum(dim=-1)
+    loss_logits = (kl_per_token * valid_mask).sum() / num_valid
+    loss_logits = loss_logits * (temperature ** 2)
 
     if gamma > 0 and student_hiddens is not None and teacher_hiddens is not None:
         loss_trajectory = 0.0
+        flat_mask = valid_mask.reshape(-1)
         for student_idx, teacher_idx in enumerate(layer_map):
-            student_h = student_hiddens[student_idx]
-            teacher_h = teacher_hiddens[teacher_idx]
+            student_h = student_hiddens[student_idx][:, :-1, :].contiguous()
+            teacher_h = teacher_hiddens[teacher_idx][:, :-1, :].contiguous()
             student_flat = student_h.reshape(-1, student_h.size(-1))
             teacher_flat = teacher_h.reshape(-1, teacher_h.size(-1))
             student_norm = F.normalize(student_flat, p=2, dim=1)
             teacher_norm = F.normalize(teacher_flat, p=2, dim=1)
-            cos_sim = (student_norm * teacher_norm).sum(dim=1).mean()
+            cos_sim_per_token = (student_norm * teacher_norm).sum(dim=1)
+            cos_sim = (cos_sim_per_token * flat_mask).sum() / num_valid
             loss_trajectory += 1 - cos_sim
         loss_trajectory = loss_trajectory / len(layer_map)
     else:
@@ -105,16 +112,24 @@ def compute_distillation_loss(
     loss_derivative = torch.tensor(0.0, device=device)
     if delta > 0 and student_hiddens is not None and teacher_hiddens is not None:
         num_derivatives = 0
+        flat_mask = valid_mask.reshape(-1)
         for student_idx in range(len(layer_map) - 1):
             teacher_idx = layer_map[student_idx]
             teacher_idx_next = layer_map[student_idx + 1]
-            student_delta = student_hiddens[student_idx + 1] - student_hiddens[student_idx]
-            teacher_delta = teacher_hiddens[teacher_idx_next] - teacher_hiddens[teacher_idx]
+            student_delta = (
+                student_hiddens[student_idx + 1][:, :-1, :]
+                - student_hiddens[student_idx][:, :-1, :]
+            )
+            teacher_delta = (
+                teacher_hiddens[teacher_idx_next][:, :-1, :]
+                - teacher_hiddens[teacher_idx][:, :-1, :]
+            )
             student_delta_flat = student_delta.reshape(-1, student_delta.size(-1))
             teacher_delta_flat = teacher_delta.reshape(-1, teacher_delta.size(-1))
             student_delta_norm = F.normalize(student_delta_flat, p=2, dim=1)
             teacher_delta_norm = F.normalize(teacher_delta_flat, p=2, dim=1)
-            cos_sim_deriv = (student_delta_norm * teacher_delta_norm).sum(dim=1).mean()
+            cos_sim_deriv_per_token = (student_delta_norm * teacher_delta_norm).sum(dim=1)
+            cos_sim_deriv = (cos_sim_deriv_per_token * flat_mask).sum() / num_valid
             loss_derivative += 1 - cos_sim_deriv
             num_derivatives += 1
         if num_derivatives > 0:

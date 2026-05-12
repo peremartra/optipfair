@@ -1612,7 +1612,6 @@ bias_scores = analyze_neuron_bias(
     prompt_pairs=prompt_pairs,
     target_layers=["gate_proj", "up_proj"],  # Analyze these layer types
     aggregation="mean",                       # "mean" or "max" across sequence length
-    batch_size=4,
     show_progress=True
 )
 
@@ -1631,7 +1630,6 @@ print(f"Example - {list(bias_scores.keys())[0]}: shape {bias_scores[list(bias_sc
 - `aggregation`: How to aggregate bias across sequence positions:
   - `"mean"`: Average bias across all token positions (default, more stable)
   - `"max"`: Maximum bias in any position (captures peaks, more sensitive)
-- `batch_size`: Batch size for processing prompt pairs (adjust based on GPU memory)
 - `show_progress`: Display progress bar while processing
 
 ### Step 2: Computing Fairness Pruning Scores
@@ -1804,7 +1802,6 @@ bias_scores = analyze_neuron_bias(
     prompt_pairs=prompt_pairs,
     target_layers=["gate_proj", "up_proj"],
     aggregation="mean",
-    batch_size=4,
     show_progress=True
 )
 

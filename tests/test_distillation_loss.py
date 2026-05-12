@@ -139,6 +139,62 @@ class TestComputeDistillationLoss(unittest.TestCase):
         self.assertEqual(delta, 0.0)
         self.assertAlmostEqual(alpha + beta, 1.0, places=6)
 
+    def test_masked_positions_do_not_change_loss_components(self):
+        """Loss components should be invariant to changes on masked token positions."""
+        batch, seq, vocab, hidden = 1, 6, 32, 8
+        n_layers = 3
+        layer_map = list(range(n_layers))
+
+        torch.manual_seed(42)
+        student_logits_a = torch.randn(batch, seq, vocab)
+        teacher_logits_a = torch.randn(batch, seq, vocab)
+        student_hiddens_a = [torch.randn(batch, seq, hidden) for _ in range(n_layers)]
+        teacher_hiddens_a = [torch.randn(batch, seq, hidden) for _ in range(n_layers)]
+
+        student_logits_b = student_logits_a.clone()
+        teacher_logits_b = teacher_logits_a.clone()
+        student_hiddens_b = [h.clone() for h in student_hiddens_a]
+        teacher_hiddens_b = [h.clone() for h in teacher_hiddens_a]
+
+        # Masked labels at positions 3, 4, 5 map to shifted positions 2, 3, 4.
+        labels = torch.tensor([[5, 6, 7, -100, -100, -100]])
+
+        student_logits_b[:, 2:5, :] = torch.randn(batch, 3, vocab)
+        teacher_logits_b[:, 2:5, :] = torch.randn(batch, 3, vocab)
+        for idx in range(n_layers):
+            student_hiddens_b[idx][:, 2:5, :] = torch.randn(batch, 3, hidden)
+            teacher_hiddens_b[idx][:, 2:5, :] = torch.randn(batch, 3, hidden)
+
+        _, loss_a = compute_distillation_loss(
+            student_logits_a,
+            teacher_logits_a,
+            student_hiddens_a,
+            teacher_hiddens_a,
+            labels,
+            layer_map=layer_map,
+            alpha=0.25,
+            beta=0.25,
+            gamma=0.25,
+            delta=0.25,
+        )
+        _, loss_b = compute_distillation_loss(
+            student_logits_b,
+            teacher_logits_b,
+            student_hiddens_b,
+            teacher_hiddens_b,
+            labels,
+            layer_map=layer_map,
+            alpha=0.25,
+            beta=0.25,
+            gamma=0.25,
+            delta=0.25,
+        )
+
+        self.assertAlmostEqual(loss_a["task"], loss_b["task"], places=6)
+        self.assertAlmostEqual(loss_a["logits"], loss_b["logits"], places=6)
+        self.assertAlmostEqual(loss_a["trajectory"], loss_b["trajectory"], places=6)
+        self.assertAlmostEqual(loss_a["derivative"], loss_b["derivative"], places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -195,7 +195,12 @@ def distill_model(
             if "input_ids" not in inputs:
                 raise ValueError("Batch inputs must contain 'input_ids' for distillation training.")
 
-            labels = inputs["input_ids"].clone()
+            if "labels" in inputs:
+                labels = inputs["labels"].clone()
+            else:
+                labels = inputs["input_ids"].clone()
+                if "attention_mask" in inputs:
+                    labels[inputs["attention_mask"] == 0] = -100
             model_inputs = {k: v for k, v in inputs.items() if k != "labels"}
 
             student_outputs = student_model(

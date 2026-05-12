@@ -333,7 +333,6 @@ def analyze_neuron_bias(
     prompt_pairs: List[Tuple[str, str]],
     target_layers: List[str] = None,
     aggregation: str = "mean",
-    batch_size: int = 4,
     show_progress: bool = True,
 ) -> Dict[str, torch.Tensor]:
     """
@@ -354,7 +353,6 @@ def analyze_neuron_bias(
         aggregation: How to aggregate bias across sequence positions:
                     - "mean": Average bias across all tokens (default, more stable)
                     - "max": Maximum bias across any token position (more sensitive)
-        batch_size: Batch size for processing prompt pairs. Adjust based on GPU memory.
         show_progress: Whether to display progress bar
         
     Returns:

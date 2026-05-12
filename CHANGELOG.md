@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Bug Fixes
+
+#### Distillation losses now ignore padding tokens
+- Fixed an issue where distillation labels were copied from `input_ids` without masking padded positions, preventing `ignore_index=-100` from taking effect.
+- Updated `compute_distillation_loss()` so logits, trajectory, and derivative components reduce only over valid tokens.
+- Trainer now respects user-provided `labels`; when labels are absent and `attention_mask` is available, it generates labels and masks padding with `-100`.
+
 ---
 
 ## [0.4.0] - 2026-04-17
