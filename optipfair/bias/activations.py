@@ -447,7 +447,7 @@ def _normalize(t: torch.Tensor) -> torch.Tensor:
 def compute_fairness_pruning_scores(
     model: Any,
     bias_scores: Dict[str, torch.Tensor],
-    bias_weight: float = 0.5,
+    bias_weight: float = 0.8,
 ) -> Dict[int, torch.Tensor]:
     """
     Combine BiasScore with ImportanceScore to produce FairnessPruningScores.
