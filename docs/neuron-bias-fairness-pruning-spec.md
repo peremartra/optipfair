@@ -40,7 +40,7 @@ from typing import Literal
 # Includes "input_norm" for backward compatibility with the current hook
 # that captures input_layernorm activations.
 ALLOWED_TARGET_LAYERS = frozenset({
-    "gate_proj", "up_proj", "down_proj", "mlp_output", "attention", "input_norm"
+    "gate_proj", "up_proj", "down_proj", "down_proj_input", "mlp_output", "attention", "input_norm"
 })
 
 def register_hooks(model, target_layers=None) -> List[Any]:
@@ -49,10 +49,18 @@ def register_hooks(model, target_layers=None) -> List[Any]:
 **Behavior:**
 - `target_layers=None` → register hooks on all supported layers, identical to current behavior. No breaking change.
 - `target_layers=["gate_proj", "up_proj"]` → register hooks only on layers whose key matches exactly the allowed prefixes.
+- `target_layers=["down_proj_input"]` → register only pre-hook captures at `down_proj` input, stored as `down_proj_input_layer_{i}`.
+- `target_layers=["down_proj", "down_proj_input"]` → capture both post-projection and pre-projection activations with separate key families.
 - If `target_layers` contains values outside `ALLOWED_TARGET_LAYERS`, raise `ValueError` with a clear message listing valid options. Validation uses the `frozenset` constant at runtime (not `Literal`, which is not iterable).
 - **Matching logic:** Instead of a generic substring match (`if "gate" in name`), use exact prefix matching from the closed vocabulary to avoid accidental captures.
 - **Implementation note:** Remove the current hardcoded `try/elif` blocks (`model.model.layers`, `model.transformer.h`, etc.). Instead, import and use `get_model_layers(model)` from `optipfair.pruning.utils` to iterate over the layers dynamically. This introduces a new cross-module dependency (`bias/` → `pruning/utils`), which is acceptable since `pruning.utils` contains architecture-agnostic utilities.
 - **Backward compatibility:** The current code captures 6 hook types per layer: `attention_output`, `mlp_output`, `gate_proj`, `up_proj`, `down_proj`, and `input_norm`. All 6 must continue to be captured when `target_layers=None`.
+
+### 1.1.1 `down_proj` vs `down_proj_input` semantics
+
+- `down_proj` captures the output of `down_proj` and remains unchanged (shape `[B, S, hidden_size]`).
+- `down_proj_input` captures the input to `down_proj` using a forward pre-hook (shape `[B, S, intermediate_size]`).
+- `down_proj_input` is explicit opt-in and must not be included implicitly when `target_layers=None`.
 
 ### 1.2 `process_prompt(model, tokenizer, prompt, target_layers=None)`
 

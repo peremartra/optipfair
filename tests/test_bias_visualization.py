@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from optipfair.bias.activations import (
+    ALLOWED_TARGET_LAYERS,
     register_hooks,
     remove_hooks,
     process_prompt,
@@ -202,6 +203,84 @@ class TestBiasActivations(unittest.TestCase):
         self.assertEqual(len(selected), 2)
         self.assertEqual(selected[0], "mlp_output_layer_0")
         self.assertEqual(selected[1], "mlp_output_layer_3")
+
+    def test_down_proj_input_is_valid_target_layer(self):
+        """Validate down_proj_input is accepted as a target layer."""
+        self.assertIn("down_proj_input", ALLOWED_TARGET_LAYERS)
+        handles = register_hooks(self.model, target_layers=["down_proj_input"])
+        try:
+            # 4 layers x 1 hook type
+            self.assertEqual(len(handles), 4)
+        finally:
+            remove_hooks(handles)
+
+    def test_down_proj_input_key_registration(self):
+        """down_proj_input target registers down_proj_input_layer_* keys."""
+        activations = process_prompt(
+            self.model,
+            self.tokenizer,
+            "test prompt",
+            target_layers=["down_proj_input"],
+        )
+
+        self.assertGreater(len(activations), 0)
+        for key in activations:
+            self.assertTrue(key.startswith("down_proj_input_layer_"))
+
+    def test_down_proj_and_down_proj_input_shapes(self):
+        """down_proj_input has intermediate size, down_proj has hidden size."""
+        down_proj_input_activations = process_prompt(
+            self.model,
+            self.tokenizer,
+            "test prompt",
+            target_layers=["down_proj_input"],
+        )
+        down_proj_activations = process_prompt(
+            self.model,
+            self.tokenizer,
+            "test prompt",
+            target_layers=["down_proj"],
+        )
+
+        self.assertGreater(len(down_proj_input_activations), 0)
+        self.assertGreater(len(down_proj_activations), 0)
+
+        # Mock sizes: hidden=128, intermediate=256
+        for key, tensor in down_proj_input_activations.items():
+            self.assertTrue(key.startswith("down_proj_input_layer_"))
+            self.assertEqual(tensor.shape[-1], 256)
+
+        for key, tensor in down_proj_activations.items():
+            self.assertTrue(key.startswith("down_proj_layer_"))
+            self.assertEqual(tensor.shape[-1], 128)
+
+    def test_combined_down_proj_and_down_proj_input_capture(self):
+        """Combined capture returns both down_proj and down_proj_input families."""
+        activations = process_prompt(
+            self.model,
+            self.tokenizer,
+            "test prompt",
+            target_layers=["down_proj", "down_proj_input"],
+        )
+
+        self.assertGreater(len(activations), 0)
+        self.assertTrue(any(k.startswith("down_proj_layer_") for k in activations))
+        self.assertTrue(any(k.startswith("down_proj_input_layer_") for k in activations))
+
+    def test_backward_compat_down_proj_and_none_behavior(self):
+        """Existing down_proj-only and None target behaviors remain unchanged."""
+        down_proj_only = process_prompt(
+            self.model,
+            self.tokenizer,
+            "test prompt",
+            target_layers=["down_proj"],
+        )
+        self.assertGreater(len(down_proj_only), 0)
+        self.assertTrue(all(k.startswith("down_proj_layer_") for k in down_proj_only))
+
+        default_activations = process_prompt(self.model, self.tokenizer, "test prompt")
+        self.assertGreater(len(default_activations), 0)
+        self.assertFalse(any(k.startswith("down_proj_input_layer_") for k in default_activations))
 
 class TestBiasMetrics(unittest.TestCase):
     """Test cases for metrics calculation."""

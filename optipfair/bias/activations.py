@@ -19,14 +19,18 @@ logger = logging.getLogger(__name__)
 # Includes "input_norm" for backward compatibility with the current hook
 # that captures input_layernorm activations.
 ALLOWED_TARGET_LAYERS = frozenset({
-    "gate_proj", "up_proj", "down_proj", "mlp_output", "attention", "input_norm"
+    "gate_proj", "up_proj", "down_proj", "down_proj_input", "mlp_output", "attention", "input_norm"
 })
+
+# Layers that must be explicitly requested and are never captured by default
+# (i.e. when target_layers=None). Add new opt-in-only layers here.
+_OPT_IN_ONLY_LAYERS = frozenset({"down_proj_input"})
 
 
 def _should_register(hook_prefix: str, target_layers: Optional[List[str]]) -> bool:
     """Check if a hook with the given prefix should be registered."""
     if target_layers is None:
-        return True
+        return hook_prefix not in _OPT_IN_ONLY_LAYERS
     return hook_prefix in target_layers
 
 
@@ -41,8 +45,9 @@ def register_hooks(model, target_layers: Optional[List[str]] = None) -> List[Any
     Args:
         model: A Hugging Face transformer model
         target_layers: Optional list of layer type prefixes to capture.
-            Valid values: "gate_proj", "up_proj", "down_proj", "mlp_output",
-            "attention", "input_norm". If None, all supported layers are captured.
+            Valid values: "gate_proj", "up_proj", "down_proj", "down_proj_input",
+            "mlp_output", "attention", "input_norm". If None, all legacy
+            supported layers are captured.
 
     Returns:
         List of hook handles that can be used to remove the hooks later
@@ -76,6 +81,12 @@ def register_hooks(model, target_layers: Optional[List[str]] = None) -> List[Any
             else:
                 # For regular tensor outputs (MLP components)
                 activations[name] = output.detach().cpu()
+        return hook
+
+    # Function to create pre-hooks for capturing module inputs
+    def hook_fn_input(name):
+        def hook(module, inputs):
+            activations[name] = inputs[0].detach().cpu()
         return hook
 
     # Use get_model_layers for multi-architecture support
@@ -128,6 +139,14 @@ def register_hooks(model, target_layers: Optional[List[str]] = None) -> List[Any
                     handles.append(
                         layer.mlp.down_proj.register_forward_hook(
                             hook_fn(f"down_proj_layer_{i}")
+                        )
+                    )
+
+            if _should_register("down_proj_input", target_layers):
+                if hasattr(layer.mlp, "down_proj"):
+                    handles.append(
+                        layer.mlp.down_proj.register_forward_pre_hook(
+                            hook_fn_input(f"down_proj_input_layer_{i}")
                         )
                     )
 

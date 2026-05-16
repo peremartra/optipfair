@@ -26,6 +26,36 @@ This functionality is particularly valuable when combined with OptiPFair's pruni
 - **Customizable Analysis**: Control which layers and components to analyze
 - **Output Flexibility**: Display visualizations interactively or save to disk
 
+### Activation Capture Semantics
+
+OptiPFair supports both pre-projection and post-projection captures for `down_proj`.
+
+- `down_proj_input`: Expanded activation before down projection (`[B, S, intermediate_size]`)
+- `down_proj`: Projected activation after down projection (`[B, S, hidden_size]`)
+
+Use `down_proj_input` when you want to inspect bias patterns in expanded MLP space, and
+use `down_proj` when you want to inspect bias patterns in the residual hidden space.
+
+```python
+from optipfair.bias.activations import get_activation_pairs
+
+act_pre_1, act_pre_2 = get_activation_pairs(
+    model,
+    tokenizer,
+    prompt1,
+    prompt2,
+    target_layers=["down_proj_input"],
+)
+
+act_post_1, act_post_2 = get_activation_pairs(
+    model,
+    tokenizer,
+    prompt1,
+    prompt2,
+    target_layers=["down_proj"],
+)
+```
+
 ## Basic Usage
 
 ```python

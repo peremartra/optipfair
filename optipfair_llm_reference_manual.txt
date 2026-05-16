@@ -1032,12 +1032,17 @@ The `layer_key` must match exactly how the layer is identified in the model's ac
 - `"mlp_output_layer_N"` - Output of MLP block in layer N
 - `"gate_proj_layer_N"` - Output of gate projection in layer N
 - `"up_proj_layer_N"` - Output of up projection in layer N
+- `"down_proj_input_layer_N"` - Input to down projection in layer N (expanded MLP space)
 - `"down_proj_layer_N"` - Output of down projection in layer N
 - `"input_norm_layer_N"` - Output of input normalization in layer N
 
 Where `N` is the layer number (starting from 0, so the first layer is 0, second is 1, etc.).
 
 Important: Always use numbers (0, 1, 2...) in layer names, not letters. For example, use `"attention_output_layer_0"` (with zero), not `"attention_output_layer_o"` (with the letter 'o').
+
+`down_proj_input` vs `down_proj`:
+- `down_proj_input` captures activations before down projection and has shape `[B, S, intermediate_size]`.
+- `down_proj` captures activations after down projection and has shape `[B, S, hidden_size]`.
 
 ### Visualization Types
 
@@ -1067,6 +1072,7 @@ visualize_mean_differences(
 # - "attention_output" - Output of the attention mechanism
 # - "gate_proj" - Output of gate projection in GLU
 # - "up_proj" - Output of up projection in GLU
+# - "down_proj_input" - Input to down projection in GLU (expanded MLP space)
 # - "down_proj" - Output of down projection in GLU
 # - "input_norm" - Output of input normalization
 
@@ -1556,6 +1562,7 @@ for i, prompt_pair in enumerate(selected_pairs):
         # - "attention_output_layer_{idx}" - Output of attention mechanism
         # - "gate_proj_layer_{idx}" - Output of gate projection in GLU
         # - "up_proj_layer_{idx}" - Output of up projection in GLU
+        # - "down_proj_input_layer_{idx}" - Input to down projection in GLU (expanded MLP space)
         # - "down_proj_layer_{idx}" - Output of down projection in GLU
         layer_key = f"attention_output_layer_{layer_idx}"
         visualize_pca(
@@ -1924,6 +1931,7 @@ According to the roadmap, OptiPFair has several planned extensions:
      - `attention_output_layer_{idx}` - Output of attention mechanism
      - `gate_proj_layer_{idx}` - Output of gate projection in GLU
      - `up_proj_layer_{idx}` - Output of up projection in GLU
+         - `down_proj_input_layer_{idx}` - Input to down projection in GLU (expanded MLP space)
      - `down_proj_layer_{idx}` - Output of down projection in GLU
    - When using `layers=[idx1, idx2, ...]`, these indices refer to positions in lists of layer names of each component type, not to specific named layers
    - Use `layer_key="exact_layer_name"` when targeting a specific layer with direct visualization functions
