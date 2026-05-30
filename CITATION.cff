@@ -1,1 +1,24 @@
-
+cff-version: 1.2.0
+message: "If you use OptiPFair in your research, please cite it using the metadata below."
+type: software
+title: "OptiPFair: Structured Pruning and Knowledge Distillation for Large Language Models"
+version: 0.4.0
+authors:
+  - family-names: Martra
+    given-names: Pere
+repository-code: "https://github.com/peremartra/optipfair"
+url: "https://peremartra.github.io/optipfair/"
+license: Apache-2.0
+date-released: "2025-01-01"
+abstract: >
+  OptiPFair is an open-source Python library for structured pruning and
+  knowledge distillation of transformer-based large language models.
+  It supports width pruning (MLP/GLU layers), depth pruning (layer removal),
+  and post-pruning knowledge distillation, with a focus on small models
+  and small datasets.
+keywords:
+  - large language models
+  - model pruning
+  - knowledge distillation
+  - transformers
+  - model compression
