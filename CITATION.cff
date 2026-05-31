@@ -10,6 +10,7 @@ repository-code: "https://github.com/peremartra/optipfair"
 url: "https://peremartra.github.io/optipfair/"
 license: Apache-2.0
 date-released: "2025-01-01"
+doi: "10.5281/zenodo.20473491"
 abstract: >
   OptiPFair is an open-source Python library for structured pruning and
   knowledge distillation of transformer-based large language models.
