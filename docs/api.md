@@ -348,12 +348,19 @@ def analyze_neuron_bias(
         prompt_pairs: List of (prompt1, prompt2) tuples where each pair differs only in
                       the demographic attribute being tested (e.g., gender, ethnicity)
         target_layers: List of layer projection types to analyze. Options:
-                      ["gate_proj", "up_proj"] (both), or subsets
+                      ["gate_proj", "up_proj", "down_proj", "down_proj_input"] or subsets.
+                      Use "down_proj_input" to capture activations in the expanded MLP space
+                      before the down projection (`[B, S, intermediate_size]`).
                       Default: ["gate_proj", "up_proj"]
         aggregation: How to aggregate bias across sequence positions:
                     - "mean": Average bias across all tokens (default, more stable)
                     - "max": Maximum bias across any token position (more sensitive)
         show_progress: Whether to display progress bar
+        
+    Note:
+        This function does **not** accept a `batch_size` parameter. Prompt pairs are
+        always processed individually (one pair at a time). Passing `batch_size` will
+        raise a `TypeError`. (Fixed in v0.4.1, closes #33.)
         
     Returns:
         Dict[str, torch.Tensor]: Mapping of layer names to bias score tensors

@@ -1,11 +1,35 @@
 ## [Unreleased]
 
-### Bug Fixes
+---
 
-#### Distillation losses now ignore padding tokens
+## [0.4.1] - 2026-05-31
+
+### 🔧 Bug Fixes
+
+#### Distillation Losses Now Ignore Padding Tokens (closes #34)
 - Fixed an issue where distillation labels were copied from `input_ids` without masking padded positions, preventing `ignore_index=-100` from taking effect.
 - Updated `compute_distillation_loss()` so logits, trajectory, and derivative components reduce only over valid tokens.
 - Trainer now respects user-provided `labels`; when labels are absent and `attention_mask` is available, it generates labels and masks padding with `-100`.
+
+#### `analyze_neuron_bias` Now Accepts `batch_size` Parameter (closes #33)
+- The reference manual documented `batch_size` as a valid parameter but the function signature did not accept it, causing `TypeError` at runtime.
+- Resolved the API/documentation mismatch: the parameter is now clearly documented as not supported at the function level; prompt pairs are processed individually (one pair per forward pass) to handle asymmetric sequence lengths correctly.
+- Updated docstring to reflect actual behavior and remove misleading `batch_size` references.
+
+### ✨ New Features
+
+#### Activation Capture at `down_proj` Input (closes #35)
+- New target layer type `"down_proj_input"` captures activations at the input of `down_proj` using a forward pre-hook, exposing the expanded MLP space (`[B, S, intermediate_size]`).
+- Existing `"down_proj"` behavior (post-projection, `[B, S, hidden_size]`) is fully unchanged.
+- `"down_proj_input"` is explicit opt-in: not included when `target_layers=None`.
+- Keys stored as `down_proj_input_layer_{i}`.
+- New tests in `test_bias_visualization.py` cover validation, key naming, shapes, combined capture, and backward compatibility.
+
+### 🚀 Status
+- Promoted from **Alpha** to **Beta** (`Development Status :: 4 - Beta`).
+
+### 🧪 Testing & Quality
+- All existing tests pass; no breaking changes to the public API.
 
 ---
 

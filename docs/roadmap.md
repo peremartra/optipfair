@@ -34,6 +34,13 @@ This document outlines the planned features and improvements for OptiPFair.
 - **Width Pruning Fix**: Model size can no longer increase when combining `expansion_divisor` with small pruning percentages (closes #27)
 - **Depth Pruning Config Sync**: `prune_model_depth()` now correctly syncs `config.layer_types` for hybrid architectures like Qwen3.5 (closes #20)
 
+### Version 0.4.1 (Released - May 2026) ✅
+
+- **Status Promotion**: Project promoted from Alpha to **Beta** — core API is stable and production-ready
+- **Distillation Padding Fix**: Padding tokens no longer contribute to the distillation loss; labels are masked with `-100` using `attention_mask` (closes #34)
+- **Bias API Consistency**: Clarified that `analyze_neuron_bias` does not accept a `batch_size` parameter — prompt pairs are processed individually (closes #33)
+- **New Activation Target `down_proj_input`**: Captures activations in the expanded MLP space (`[B, S, intermediate_size]`) before the down projection, enabling finer-grained bias analysis (closes #35)
+
 ### Version 0.5.0
 - **Fairness prunning**: consider bias in pruning. 
 
