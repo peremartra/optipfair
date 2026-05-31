@@ -206,9 +206,11 @@ For a deployable REST API with Gradio frontend, see **[OptiPFair-API](https://gi
 
 ```bibtex
 @software{optipfair2025,
-  author = {Pere Martra},
+  author = {Martra, Pere},
   title = {OptiPFair: Structured Pruning and Knowledge Distillation for Large Language Models},
+  version = {0.4.0},
   year = {2025},
+  doi = {10.5281/zenodo.20473491},
   url = {https://github.com/peremartra/optipfair}
 }
 ```
