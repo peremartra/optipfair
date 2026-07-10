@@ -223,6 +223,35 @@ def process_prompt(
     return result
 
 
+def get_prompt_activations(
+    model: Any,
+    tokenizer: Any,
+    prompt: str,
+    target_layers: Optional[List[str]] = None,
+) -> Dict[str, torch.Tensor]:
+    """
+    Get activations for a single prompt.
+
+    This is the public single-prompt counterpart to get_activation_pairs.
+
+    Args:
+        model: A Hugging Face transformer model
+        tokenizer: Matching tokenizer for the model
+        prompt: Prompt text to process
+        target_layers: Optional list of layer type prefixes to capture.
+            If None, captures all supported layers.
+
+    Returns:
+        Dictionary mapping layer names to activation tensors
+    """
+    return process_prompt(
+        model=model,
+        tokenizer=tokenizer,
+        prompt=prompt,
+        target_layers=target_layers,
+    )
+
+
 def get_activation_pairs(
     model: Any,
     tokenizer: Any,

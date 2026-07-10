@@ -91,6 +91,61 @@ print(metrics)
 
 ### Core Functions
 
+#### `get_prompt_activations`
+
+```python
+from optipfair.bias import get_prompt_activations
+
+activations = get_prompt_activations(
+    model,
+    tokenizer,
+    "The doctor reviewed the report and concluded that",
+    target_layers=["mlp_output", "attention"],
+)
+```
+
+Captures activations for a single prompt and returns a dictionary mapping
+layer names to tensors. This is useful when you want raw activation inspection
+without pairwise comparison.
+
+#### `visualize_prompt_heatmap`
+
+```python
+from optipfair.bias import visualize_prompt_heatmap
+
+visualize_prompt_heatmap(
+    model,
+    tokenizer,
+    "The doctor reviewed the report and concluded that",
+    layer_key="gate_proj_layer_8",
+    bin_size=64,              # neurons per bin on the X-axis
+    cmap="YlOrRd",
+    vmax_percentile=99.0,
+    output_dir="./heatmaps",  # omit to display only
+)
+```
+
+Heatmap of raw activations for a **single prompt** in a specific layer.
+
+- **Y-axis**: token positions (`T0`, `T1`, …).
+- **X-axis**: neuron bins — each bin groups `bin_size` consecutive neurons and
+  shows their mean activation magnitude.
+- Color scale is clipped to the `vmax_percentile` percentile for readability.
+- `output_dir=None` displays the figure without saving.
+- No `save` parameter — saving is controlled exclusively by `output_dir`.
+
+**Parameters:**
+- `model`, `tokenizer`: HuggingFace model and matching tokenizer.
+- `prompt`: Single text prompt.
+- `layer_key`: Exact layer name (e.g. `"gate_proj_layer_5"`).
+- `bin_size` (default `64`): Neurons per X-axis bin.
+- `output_dir` (default `None`): Directory to save the figure.
+- `figure_format` (default `"png"`).
+- `cmap` (default `"YlOrRd"`).
+- `vmax_percentile` (default `99.0`).
+- `reduce_batch` (`"mean"` or `"first"`, default `"mean"`).
+- `show` (default `True`): Whether to call `plt.show()`.
+
 #### `visualize_bias`
 
 ```python

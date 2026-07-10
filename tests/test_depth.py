@@ -638,5 +638,139 @@ class TestAnalyzeLayerImportance(unittest.TestCase):
         self.assertTrue(all(isinstance(v, float) for v in result.values()))
 
 
+class TestCalculateCosineImportance(unittest.TestCase):
+    """Unit tests for _calculate_cosine_importance (issue #38 regression)."""
+
+    def setUp(self):
+        from optipfair.pruning.depth import _calculate_cosine_importance
+        self._fn = _calculate_cosine_importance
+
+    def _make_tensors(self, batch, seq, hidden, same=False):
+        """Return (input_tensor, output_tensor) with shape [batch, seq, hidden]."""
+        torch.manual_seed(42)
+        x = torch.randn(batch, seq, hidden)
+        y = x.clone() if same else torch.randn(batch, seq, hidden)
+        return x, y
+
+    # ------------------------------------------------------------------
+    # Issue #38 invariant: adding padding must not change the score
+    # ------------------------------------------------------------------
+    def test_padding_invariance(self):
+        """Score with padded sequences equals score with only real tokens."""
+        batch, real_len, hidden = 4, 8, 32
+        torch.manual_seed(0)
+        x = torch.randn(batch, real_len, hidden)
+        y = torch.randn(batch, real_len, hidden)
+
+        # Unpadded baseline (all tokens valid)
+        mask_full = torch.ones(batch, real_len, dtype=torch.long)
+        score_no_pad = self._fn(x, y, layer_idx=0, attention_mask=mask_full)
+
+        # Padded: append pad_len zero positions (zeros for both tensors)
+        pad_len = 56  # 8 real + 56 pad = 64 total
+        zeros = torch.zeros(batch, pad_len, hidden)
+        x_padded = torch.cat([x, zeros], dim=1)
+        y_padded = torch.cat([y, zeros], dim=1)
+        mask_padded = torch.cat([
+            torch.ones(batch, real_len, dtype=torch.long),
+            torch.zeros(batch, pad_len, dtype=torch.long),
+        ], dim=1)
+
+        score_with_pad = self._fn(x_padded, y_padded, layer_idx=0, attention_mask=mask_padded)
+
+        self.assertAlmostEqual(score_no_pad, score_with_pad, places=5,
+                               msg="Padding tokens must not affect the importance score.")
+
+    # ------------------------------------------------------------------
+    # Backward compatibility: no mask -> still returns a finite float
+    # ------------------------------------------------------------------
+    def test_no_mask_returns_finite_float(self):
+        """When attention_mask=None the function must still return a valid float."""
+        x, y = self._make_tensors(4, 16, 32)
+        score = self._fn(x, y, layer_idx=0)
+        self.assertIsInstance(score, float)
+        self.assertTrue(0.0 <= score <= 2.0,
+                        msg=f"Unexpected score range: {score}")
+
+    # ------------------------------------------------------------------
+    # All-padding batch -> 0.0 without crash
+    # ------------------------------------------------------------------
+    def test_all_padding_returns_zero(self):
+        """A batch whose attention_mask is all zeros must return 0.0."""
+        x, y = self._make_tensors(4, 16, 32)
+        mask = torch.zeros(4, 16, dtype=torch.long)
+        score = self._fn(x, y, layer_idx=0, attention_mask=mask)
+        self.assertEqual(score, 0.0)
+
+    # ------------------------------------------------------------------
+    # Empty tensor -> 0.0 without crash
+    # ------------------------------------------------------------------
+    def test_empty_tensor_returns_zero(self):
+        """Empty tensors must not raise exceptions."""
+        empty = torch.empty(0, 16, 32)
+        score = self._fn(empty, empty, layer_idx=0)
+        self.assertEqual(score, 0.0)
+
+    # ------------------------------------------------------------------
+    # Identical input/output -> importance near 0 (high similarity)
+    # ------------------------------------------------------------------
+    def test_identical_tensors_near_zero_importance(self):
+        """If a layer is a no-op its importance score should be close to 0."""
+        x, y = self._make_tensors(4, 16, 32, same=True)
+        mask = torch.ones(4, 16, dtype=torch.long)
+        score = self._fn(x, y, layer_idx=0, attention_mask=mask)
+        self.assertAlmostEqual(score, 0.0, places=4)
+
+    # ------------------------------------------------------------------
+    # analyze_layer_importance with explicit padding: scores stable
+    # ------------------------------------------------------------------
+    def test_analyze_layer_importance_padding_stable(self):
+        """End-to-end: adding padding rows to dataloader must not shift scores."""
+        from torch.utils.data import DataLoader, Dataset
+
+        model = MockSimpleTransformer(num_layers=2, hidden_size=32)
+        model.eval()
+
+        real_len = 8
+        pad_len = 24  # total seq = 32
+        batch_size = 4
+        n_samples = 8
+
+        torch.manual_seed(1)
+        input_ids = torch.randint(0, 1000, (n_samples, real_len))
+        input_ids_padded = torch.cat(
+            [input_ids, torch.zeros(n_samples, pad_len, dtype=torch.long)], dim=1
+        )
+        mask_padded = torch.cat([
+            torch.ones(n_samples, real_len, dtype=torch.long),
+            torch.zeros(n_samples, pad_len, dtype=torch.long),
+        ], dim=1)
+        mask_full = torch.ones(n_samples, real_len, dtype=torch.long)
+
+        class DictDS(Dataset):
+            def __init__(self, ids, mask):
+                self.ids, self.mask = ids, mask
+            def __len__(self): return len(self.ids)
+            def __getitem__(self, i):
+                return {'input_ids': self.ids[i], 'attention_mask': self.mask[i]}
+
+        from optipfair.pruning.depth import analyze_layer_importance
+
+        dl_no_pad = DataLoader(DictDS(input_ids, mask_full), batch_size=batch_size)
+        dl_padded = DataLoader(DictDS(input_ids_padded, mask_padded), batch_size=batch_size)
+
+        scores_no_pad = analyze_layer_importance(model, dl_no_pad, layers_path="model.layers",
+                                                  show_progress=False)
+        scores_padded = analyze_layer_importance(model, dl_padded, layers_path="model.layers",
+                                                  show_progress=False)
+
+        for idx in scores_no_pad:
+            self.assertAlmostEqual(
+                scores_no_pad[idx], scores_padded[idx], places=4,
+                msg=f"Layer {idx}: score changed when padding was added "
+                    f"({scores_no_pad[idx]:.6f} vs {scores_padded[idx]:.6f})"
+            )
+
+
 if __name__ == '__main__':
     unittest.main()

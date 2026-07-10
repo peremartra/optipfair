@@ -430,54 +430,63 @@ def _find_layers_by_inspection(model):
     return _inspect_object(model)
 
 
-def _calculate_cosine_importance(input_tensor, output_tensor, layer_idx, is_first_batch=False):
+def _calculate_cosine_importance(input_tensor, output_tensor, layer_idx, is_first_batch=False,
+                                  attention_mask=None):
     """
     Calculate importance score using cosine similarity between input and output tensors.
-    
+
+    Computes token-level cosine similarity (dim=-1) over the hidden-state dimension.
+    When attention_mask is provided, padding tokens (mask=0) are excluded from the
+    computation so they do not distort the layer importance score.
+
     Args:
-        input_tensor: Input tensor to the layer
-        output_tensor: Output tensor from the layer  
+        input_tensor: Input tensor to the layer, shape [batch, seq_len, hidden]
+        output_tensor: Output tensor from the layer, shape [batch, seq_len, hidden]
         layer_idx: Layer index (for debugging)
         is_first_batch: Whether this is the first batch (for debugging output)
-    
+        attention_mask: Optional boolean/int tensor of shape [batch, seq_len] (1=real token,
+                        0=padding). When None, all positions are treated as valid.
+
     Returns:
         float: Importance score (0.0 to 1.0), where higher values indicate more importance
     """
     # Validate tensor dimensions
     if input_tensor.numel() == 0 or output_tensor.numel() == 0:
         return 0.0
-    
+
     try:
-        # Flatten tensors: [batch_size, features]  
-        input_flat = input_tensor.view(input_tensor.size(0), -1)
-        output_flat = output_tensor.view(output_tensor.size(0), -1)
-        
-        # Filter out non-finite values
-        input_valid_mask = torch.all(torch.isfinite(input_flat), dim=1)
-        output_valid_mask = torch.all(torch.isfinite(output_flat), dim=1)
-        valid_mask = input_valid_mask & output_valid_mask
-        
-        if not valid_mask.any():
+        # Token-level cosine similarity: [batch, seq_len, hidden] -> [batch, seq_len]
+        similarities = F.cosine_similarity(input_tensor, output_tensor, dim=-1)
+
+        if attention_mask is not None:
+            # Move mask to same device and cast to float for arithmetic
+            mask = attention_mask.to(similarities.device).float()
+
+            # Zero out similarity scores for padding positions
+            valid_similarities = similarities * mask
+
+            # Count only real (non-padding) tokens
+            num_valid_tokens = mask.sum()
+
+            if num_valid_tokens == 0:
+                if is_first_batch:
+                    print(f"Warning: Layer {layer_idx} contained only padding tokens in this batch.")
+                return 0.0
+
+            mean_similarity = valid_similarities.sum() / num_valid_tokens
+        else:
+            # No mask provided: average over all positions (backward-compatible fallback)
+            mean_similarity = similarities.mean()
+
+        # Guard against NaN/Inf (e.g. zero-norm vectors)
+        if not torch.isfinite(mean_similarity):
             if is_first_batch:
-                print(f"Warning: Layer {layer_idx} has all inf/nan samples")
+                print(f"Warning: Layer {layer_idx} generated non-finite similarity values.")
             return 0.0
-        
-        # Use only valid samples
-        input_valid = input_flat[valid_mask]
-        output_valid = output_flat[valid_mask]
-        
-        # Calculate cosine similarity
-        similarity = F.cosine_similarity(input_valid, output_valid, dim=1)
-        
-        # Filter finite similarities and calculate importance
-        finite_similarities = similarity[torch.isfinite(similarity)]
-        if len(finite_similarities) == 0:
-            return 0.0
-        
-        importance = 1 - finite_similarities.mean().item()
-        
-        return importance
-    
+
+        # Importance metric: S = 1 - CosineSim(X, Y)
+        return 1.0 - mean_similarity.item()
+
     except Exception as e:
         if is_first_batch:
             print(f"Error in layer {layer_idx}: {e}")
@@ -609,7 +618,8 @@ def analyze_layer_importance(model, dataloader, layers_path=None, show_progress=
                     
                     importance = _calculate_cosine_importance(
                         input_tensor, output_tensor, layer_idx,
-                        is_first_batch=(batch_idx == 0)
+                        is_first_batch=(batch_idx == 0),
+                        attention_mask=inputs.get('attention_mask')
                     )
                     
                     layer_importance_scores[layer_idx].append(importance)

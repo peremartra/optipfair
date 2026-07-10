@@ -589,7 +589,7 @@ print(f"Tokens per second improvement: {comparison['tps_improvement_percent']:.2
 
 ## Layer Importance Analysis
 
-OptiPFair includes functionality to analyze the importance of transformer layers using cosine similarity. This helps identify which layers contribute most to the model's transformations, informing depth pruning decisions.
+OptiPFair includes functionality to analyze the importance of transformer layers using cosine similarity. This helps identify which layers contribute most to the model's transformations, informing depth pruning decisions. When an `attention_mask` is available in the batch, padding tokens are excluded from the score so short sequences padded to a large `max_length` do not distort the result.
 
 ### Basic Usage
 
@@ -688,6 +688,8 @@ pruned_model = prune_model(
 ### DataLoader Format Support (v0.2.4+)
 
 Starting from OptiPFair v0.2.4, `analyze_layer_importance` automatically handles multiple DataLoader batch formats, making it compatible with both HuggingFace datasets and native PyTorch structures.
+
+The layer-importance score is computed token-by-token with cosine similarity over the hidden dimension. If the batch contains `attention_mask`, padding positions are masked out automatically before averaging.
 
 #### Supported Batch Formats
 

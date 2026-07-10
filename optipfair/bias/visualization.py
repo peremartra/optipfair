@@ -17,6 +17,7 @@ import json
 import logging
 
 from .activations import get_activation_pairs, get_layer_names, select_layers
+from .activations import get_prompt_activations
 from .metrics import calculate_activation_differences, calculate_bias_metrics
 from .defaults import DEFAULT_PROMPT_PAIRS
 from .utils import ensure_directory
@@ -321,6 +322,150 @@ def visualize_heatmap(
         print(f"Saved {filepath}")
     
     plt.show()
+
+
+def visualize_prompt_heatmap(
+    model: Any,
+    tokenizer: Any,
+    prompt: str,
+    layer_key: str,
+    bin_size: int = 64,
+    output_dir: Optional[str] = None,
+    figure_format: str = "png",
+    prompt_index: int = 0,
+    cmap: str = "YlOrRd",
+    vmax_percentile: float = 99.0,
+    reduce_batch: str = "mean",
+    show: bool = True,
+    **params,
+):
+    """
+    Heatmap of raw activations for a single prompt in a specific layer.
+
+    Rows (Y-axis): token positions in the prompt.
+    Columns (X-axis): neuron bins (each bin groups bin_size consecutive neurons).
+
+    Args:
+        model: A HuggingFace transformer model.
+        tokenizer: Matching tokenizer for the model.
+        prompt: Text prompt to process.
+        layer_key: Exact activation key to visualize (e.g. "gate_proj_layer_5").
+        bin_size: Number of neurons per bin on the X-axis. Default 64.
+        output_dir: Directory to save the figure. None = do not save.
+        figure_format: File format when saving (png, pdf, svg).
+        prompt_index: Index label used in the saved filename.
+        cmap: Matplotlib colormap. Default "YlOrRd".
+        vmax_percentile: Percentile used to clip the color scale. Default 99.
+        reduce_batch: How to collapse the batch dimension when B > 1:
+            "mean" (default) or "first".
+        show: Whether to call plt.show(). Set to False in non-interactive environments.
+        **params: Unused; accepted for forward-compatibility.
+    """
+    # Capture activations for the single prompt
+    layer_prefix = layer_key.split("_layer_")[0] if "_layer_" in layer_key else None
+    target = [layer_prefix] if layer_prefix else None
+    activations = get_prompt_activations(
+        model=model,
+        tokenizer=tokenizer,
+        prompt=prompt,
+        target_layers=target,
+    )
+
+    if not activations:
+        logger.warning("No activations were captured for the given prompt.")
+        return
+
+    if layer_key not in activations:
+        logger.warning(
+            f"Layer key '{layer_key}' not found in activations. "
+            f"Available: {sorted(activations.keys())}"
+        )
+        return
+
+    # Build 2-D matrix: rows = token positions, cols = neurons
+    tensor = activations[layer_key].float()  # CPU tensor
+
+    # Collapse batch dimension if present (B x S x H -> S x H)
+    if tensor.ndim == 3:
+        tensor = tensor.mean(dim=0) if reduce_batch == "mean" else tensor[0]
+    elif tensor.ndim > 3:
+        while tensor.ndim > 2:
+            tensor = tensor.mean(dim=0)
+
+    n_tokens, n_neurons = tensor.shape
+    effective_bin = bin_size if n_neurons >= bin_size else 1
+    if effective_bin != bin_size:
+        logger.warning(
+            f"bin_size={bin_size} exceeds neuron dimension ({n_neurons}). Using bin_size=1."
+        )
+    n_bins = n_neurons // effective_bin
+
+    # Trim to exact multiple of effective_bin and average within each bin: S x n_bins
+    trimmed = tensor[:, : n_bins * effective_bin].numpy()
+    matrix = trimmed.reshape(n_tokens, n_bins, effective_bin).mean(axis=2)
+
+    # Compute color scale from percentile
+    local_vmax = float(np.percentile(matrix, vmax_percentile))
+
+    # Plot
+    fig_height = max(4, n_tokens * 0.45 + 2.0)
+    fig, ax = plt.subplots(figsize=(14, fig_height))
+    fig.patch.set_facecolor("white")
+
+    im = ax.imshow(
+        matrix,
+        aspect="auto",
+        cmap=cmap,
+        vmin=0,
+        vmax=local_vmax,
+        interpolation="nearest",
+        origin="upper",
+    )
+
+    # Y-axis: token positions
+    ax.set_yticks(range(n_tokens))
+    ax.set_yticklabels([f"T{i}" for i in range(n_tokens)], fontsize=8)
+    ax.set_ylabel("Token position", fontsize=11)
+
+    # X-axis: neuron bins, labels show first neuron index of each bin
+    n_xticks = min(9, n_bins)
+    xtick_bins = np.linspace(0, n_bins - 1, n_xticks).astype(int)
+    ax.set_xticks(xtick_bins)
+    ax.set_xticklabels(
+        [str(int(b * effective_bin)) for b in xtick_bins],
+        fontsize=8,
+        rotation=30,
+    )
+    ax.set_xlabel("Neuron index", fontsize=11)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label(f"[0 - {local_vmax:.4f}] (p{int(vmax_percentile)})", fontsize=9)
+    cbar.ax.tick_params(labelsize=8)
+
+    ax.set_title(
+        f"Activation Heatmap \u2014 {layer_key} | bin={effective_bin}",
+        fontsize=12,
+        fontweight="bold",
+        pad=10,
+    )
+    plt.tight_layout()
+
+    if output_dir:
+        ensure_directory(output_dir)
+        layer_parts = layer_key.split("_")
+        layer_type_str = "_".join(layer_parts[:-1])
+        layer_num = layer_parts[-1]
+        filename = (
+            f"prompt_heatmap_{layer_type_str}_{layer_num}"
+            f"_bin{effective_bin}_prompt{prompt_index}.{figure_format}"
+        )
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath, dpi=300, bbox_inches="tight")
+        print(f"Saved {filepath}")
+
+    if show:
+        plt.show()
+
 
 def visualize_pca(
     model: Any, 

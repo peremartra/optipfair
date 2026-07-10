@@ -6,6 +6,7 @@ import unittest
 import torch
 import torch.nn as nn
 import numpy as np
+import matplotlib.pyplot as plt
 import sys
 import os
 from unittest.mock import MagicMock, patch
@@ -18,10 +19,12 @@ from optipfair.bias.activations import (
     register_hooks,
     remove_hooks,
     process_prompt,
+    get_prompt_activations,
     get_activation_pairs,
     get_layer_names,
     select_layers,
 )
+from optipfair.bias.visualization import visualize_prompt_heatmap
 from optipfair.bias.metrics import (
     calculate_activation_differences,
     calculate_bias_metrics,
@@ -158,6 +161,43 @@ class TestBiasActivations(unittest.TestCase):
             
             # Should have same keys
             self.assertEqual(set(act1.keys()), set(act2.keys()))
+
+    def test_get_prompt_activations(self):
+        """Test getting activations for a single prompt."""
+        with patch('optipfair.bias.activations.process_prompt') as mock_process:
+            mock_process.return_value = {
+                "mlp_output_layer_0": torch.randn(1, 10, 128),
+                "attention_output_layer_0": torch.randn(1, 10, 128),
+            }
+
+            activations = get_prompt_activations(
+                self.model,
+                self.tokenizer,
+                "prompt1",
+            )
+
+            self.assertGreater(len(activations), 0)
+            self.assertIn("mlp_output_layer_0", activations)
+            self.assertIn("attention_output_layer_0", activations)
+
+    def test_get_prompt_activations_propagates_target_layers(self):
+        """Test target_layers is propagated in single-prompt activation API."""
+        with patch('optipfair.bias.activations.process_prompt') as mock_process:
+            mock_process.return_value = {"down_proj_input_layer_0": torch.randn(1, 10, 256)}
+
+            _ = get_prompt_activations(
+                self.model,
+                self.tokenizer,
+                "prompt1",
+                target_layers=["down_proj_input"],
+            )
+
+            mock_process.assert_called_once_with(
+                model=self.model,
+                tokenizer=self.tokenizer,
+                prompt="prompt1",
+                target_layers=["down_proj_input"],
+            )
         
     def test_get_layer_names(self):
         """Test extracting and sorting layer names."""
@@ -281,6 +321,111 @@ class TestBiasActivations(unittest.TestCase):
         default_activations = process_prompt(self.model, self.tokenizer, "test prompt")
         self.assertGreater(len(default_activations), 0)
         self.assertFalse(any(k.startswith("down_proj_input_layer_") for k in default_activations))
+
+
+class TestVisualizePromptHeatmap(unittest.TestCase):
+    """Tests for visualize_prompt_heatmap (single-prompt activation heatmap)."""
+
+    def setUp(self):
+        """Reuse the same mock model and tokenizer as TestBiasActivations."""
+        self.model = MockModel()
+        self.tokenizer = MagicMock()
+        tokenizer_output = MagicMock()
+        tokenizer_output.input_ids = torch.tensor([[1, 2, 3]])
+        tokenizer_output.to = MagicMock(return_value=tokenizer_output)
+        self.tokenizer.return_value = tokenizer_output
+
+    def test_runs_without_error_with_valid_layer_key(self):
+        """visualize_prompt_heatmap completes without raising for a known layer key."""
+        with patch("optipfair.bias.visualization.get_prompt_activations") as mock_gpa, \
+             patch("matplotlib.pyplot.show"), \
+             patch("matplotlib.pyplot.tight_layout"):
+            # Tensor shape: B=1, S=5, H=256 (simulates gate_proj intermediate)
+            mock_gpa.return_value = {
+                "gate_proj_layer_0": torch.rand(1, 5, 256)
+            }
+            # Should not raise
+            visualize_prompt_heatmap(
+                self.model,
+                self.tokenizer,
+                "test prompt",
+                layer_key="gate_proj_layer_0",
+                bin_size=64,
+                show=False,
+            )
+
+    def test_matrix_shape_after_binning(self):
+        """Matrix produced has shape (n_tokens, n_bins) = (S, H // bin_size)."""
+        import matplotlib
+        matplotlib.use("Agg")  # Non-interactive backend for tests
+
+        with patch("optipfair.bias.visualization.get_prompt_activations") as mock_gpa, \
+             patch("matplotlib.pyplot.show"):
+            mock_gpa.return_value = {
+                "gate_proj_layer_2": torch.ones(1, 4, 256)
+            }
+            # Capture the matrix via imshow
+            captured = {}
+
+            original_imshow = plt.Axes.imshow
+            def fake_imshow(self_ax, data, **kwargs):
+                captured["matrix"] = data
+                return original_imshow(self_ax, data, **kwargs)
+
+            with patch("matplotlib.axes.Axes.imshow", fake_imshow):
+                visualize_prompt_heatmap(
+                    self.model,
+                    self.tokenizer,
+                    "test prompt",
+                    layer_key="gate_proj_layer_2",
+                    bin_size=64,
+                    show=False,
+                )
+
+            # S=4, H=256, bin_size=64 => n_bins=4
+            self.assertIn("matrix", captured)
+            matrix = captured["matrix"]
+            self.assertEqual(matrix.shape, (4, 4))
+
+    def test_warns_on_missing_layer_key(self):
+        """A warning is issued when layer_key is absent from activations."""
+        with patch("optipfair.bias.visualization.get_prompt_activations") as mock_gpa, \
+             patch("optipfair.bias.visualization.logger") as mock_logger:
+            mock_gpa.return_value = {"gate_proj_layer_0": torch.rand(1, 5, 256)}
+            visualize_prompt_heatmap(
+                self.model,
+                self.tokenizer,
+                "test prompt",
+                layer_key="gate_proj_layer_99",  # Does not exist
+                show=False,
+            )
+            mock_logger.warning.assert_called()
+
+    def test_warns_on_empty_activations(self):
+        """A warning is issued when no activations are captured."""
+        with patch("optipfair.bias.visualization.get_prompt_activations") as mock_gpa, \
+             patch("optipfair.bias.visualization.logger") as mock_logger:
+            mock_gpa.return_value = {}
+            visualize_prompt_heatmap(
+                self.model,
+                self.tokenizer,
+                "test prompt",
+                layer_key="gate_proj_layer_0",
+                show=False,
+            )
+            mock_logger.warning.assert_called()
+
+    def test_no_save_parameter(self):
+        """visualize_prompt_heatmap does not accept a 'save' parameter."""
+        import inspect
+        sig = inspect.signature(visualize_prompt_heatmap)
+        self.assertNotIn("save", sig.parameters)
+
+    def test_public_import_from_bias(self):
+        """visualize_prompt_heatmap is importable from optipfair.bias."""
+        from optipfair.bias import visualize_prompt_heatmap as vph
+        self.assertTrue(callable(vph))
+
 
 class TestBiasMetrics(unittest.TestCase):
     """Test cases for metrics calculation."""

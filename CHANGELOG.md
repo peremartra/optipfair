@@ -1,5 +1,25 @@
 ## [Unreleased]
 
+### 🔧 Bug Fixes
+
+#### `_calculate_cosine_importance` Now Excludes Padding Tokens (closes #38)
+- **Root cause**: The function flattened hidden states to `[batch, seq_len * hidden_dim]` and computed
+  cosine similarity per sample (`dim=1`). Padding positions were included in the computation.
+  With short sequences padded to a large `max_length`, over 96% of each vector could correspond to
+  padding, producing artificially distorted layer importance scores.
+- **Fix**: Cosine similarity is now computed at the token level (`dim=-1`) over the original
+  `[batch, seq_len, hidden]` tensors.  When an `attention_mask` is available (supplied by the
+  DataLoader), padding positions (`mask=0`) are zeroed out and only real tokens contribute to the
+  mean similarity.  This matches `S = 1 − CosineSim(X, Y)` applied token-by-token.
+- **Backward compatibility**: `_calculate_cosine_importance` gains a new trailing optional parameter
+  `attention_mask=None`.  Existing callers that omit it continue to work; all positions are treated as
+  valid in that case.  `analyze_layer_importance`'s public signature is **unchanged**.
+- **Behavior change**: Importance scores will differ from previous versions when sequences contain
+  padding (scores are now more accurate).  Runs without padding are unaffected.
+- **New tests**: `TestCalculateCosineImportance` class (6 tests) covering the padding-invariance
+  invariant, backward-compat without mask, all-padding edge case, empty tensor, identical-tensors
+  near-zero score, and an end-to-end regression via `analyze_layer_importance`.
+
 ---
 
 ## [0.4.1] - 2026-05-31

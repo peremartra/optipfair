@@ -1207,6 +1207,64 @@ visualize_bias(
 
 OptiPFair calculates quantitative metrics of bias that can be used for further analysis:
 
+### Single Prompt Activations
+
+You can also capture activations from a single prompt without pairwise comparison:
+
+```python
+from optipfair.bias import get_prompt_activations
+
+prompt = "The doctor reviewed the report and concluded that"
+activations = get_prompt_activations(
+    model,
+    tokenizer,
+    prompt,
+    target_layers=["mlp_output", "attention"],
+)
+
+print(f"Captured {len(activations)} layers")
+```
+
+This is useful for raw activation inspection workflows where you only need one forward pass.
+
+### Single Prompt Heatmap
+
+Visualize the raw activation magnitudes of a single prompt as a neuron-binned heatmap.
+Rows represent token positions; columns represent neuron bins (groups of `bin_size` consecutive neurons):
+
+```python
+from optipfair.bias import visualize_prompt_heatmap
+
+# Visualize gate_proj activations for a single prompt
+visualize_prompt_heatmap(
+    model,
+    tokenizer,
+    "The doctor reviewed the report and concluded that",
+    layer_key="gate_proj_layer_8",
+    bin_size=64,          # neurons per bin (default)
+    cmap="YlOrRd",
+    vmax_percentile=99.0,
+    output_dir="./heatmaps",  # omit to display only, no save parameter
+)
+
+# Inspect a different projection layer
+visualize_prompt_heatmap(
+    model,
+    tokenizer,
+    "The engineer proposed a solution to the problem",
+    layer_key="up_proj_layer_5",
+    bin_size=128,
+    show=True,
+)
+```
+
+**Key points:**
+- Y-axis: token positions (`T0`, `T1`, …)
+- X-axis: neuron index (first index of each bin)
+- Color scale clipped to `vmax_percentile` (default p99), same convention as neuron bias notebooks
+- No `save` parameter — saving is controlled by `output_dir`
+- `reduce_batch`: how to collapse the batch dimension (`"mean"` or `"first"`, default `"mean"`)
+
 ```python
 from optipfair.bias import calculate_bias_metrics
 from optipfair.bias.activations import get_activation_pairs
@@ -1239,7 +1297,7 @@ print(f"  Max difference: {metrics['overall_metrics']['max_difference']:.6f}")
 ```
 ### Layer Importance Analysis
 
-OptiPFair includes functionality to analyze the importance of transformer layers using cosine similarity between layer inputs and outputs. This helps identify which layers contribute most to the model's transformations, informing depth pruning decisions by highlighting "passive" layers that could be candidates for removal.
+OptiPFair includes functionality to analyze the importance of transformer layers using cosine similarity between layer inputs and outputs. This helps identify which layers contribute most to the model's transformations, informing depth pruning decisions by highlighting "passive" layers that could be candidates for removal. When `attention_mask` is present in the batch, padding tokens are excluded automatically so the score reflects real tokens instead of padded positions.
 
 #### Basic Layer Analysis
 
@@ -1303,6 +1361,8 @@ importance_scores = opf.analyze_layer_importance(
     show_progress=False  # Disable progress bar
 )
 ```
+
+The importance score is computed token-by-token using cosine similarity over the hidden dimension. If the dataloader batch includes `attention_mask`, padding positions are masked out before the final average is calculated.
 
 #### Integration with Depth Pruning
 
