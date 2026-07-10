@@ -10,6 +10,7 @@ import os
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 import seaborn as sns
 from typing import Dict, List, Tuple, Optional, Union, Any
 from sklearn.decomposition import PCA
@@ -333,7 +334,7 @@ def visualize_prompt_heatmap(
     output_dir: Optional[str] = None,
     figure_format: str = "png",
     prompt_index: int = 0,
-    cmap: str = "YlOrRd",
+    cmap: str = "RdBu_r",
     vmax_percentile: float = 99.0,
     reduce_batch: str = "mean",
     show: bool = True,
@@ -354,7 +355,7 @@ def visualize_prompt_heatmap(
         output_dir: Directory to save the figure. None = do not save.
         figure_format: File format when saving (png, pdf, svg).
         prompt_index: Index label used in the saved filename.
-        cmap: Matplotlib colormap. Default "YlOrRd".
+        cmap: Matplotlib colormap. Default "RdBu_r" (diverging, centered at 0).
         vmax_percentile: Percentile used to clip the color scale. Default 99.
         reduce_batch: How to collapse the batch dimension when B > 1:
             "mean" (default) or "first".
@@ -404,8 +405,11 @@ def visualize_prompt_heatmap(
     trimmed = tensor[:, : n_bins * effective_bin].numpy()
     matrix = trimmed.reshape(n_tokens, n_bins, effective_bin).mean(axis=2)
 
-    # Compute color scale from percentile
-    local_vmax = float(np.percentile(matrix, vmax_percentile))
+    # Compute symmetric signed color scale from absolute percentile
+    abs_bound = float(np.percentile(np.abs(matrix), vmax_percentile))
+    if abs_bound == 0:
+        abs_bound = 1e-12
+    norm = TwoSlopeNorm(vmin=-abs_bound, vcenter=0.0, vmax=abs_bound)
 
     # Plot
     fig_height = max(4, n_tokens * 0.45 + 2.0)
@@ -416,8 +420,7 @@ def visualize_prompt_heatmap(
         matrix,
         aspect="auto",
         cmap=cmap,
-        vmin=0,
-        vmax=local_vmax,
+        norm=norm,
         interpolation="nearest",
         origin="upper",
     )
@@ -439,7 +442,10 @@ def visualize_prompt_heatmap(
     ax.set_xlabel("Neuron index", fontsize=11)
 
     cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
-    cbar.set_label(f"[0 - {local_vmax:.4f}] (p{int(vmax_percentile)})", fontsize=9)
+    cbar.set_label(
+        f"[-{abs_bound:.4f}, +{abs_bound:.4f}] (p{int(vmax_percentile)} | abs)",
+        fontsize=9,
+    )
     cbar.ax.tick_params(labelsize=8)
 
     ax.set_title(
@@ -476,7 +482,7 @@ def visualize_prompt_layer_heatmap(
     output_dir: Optional[str] = None,
     figure_format: str = "png",
     prompt_index: int = 0,
-    cmap: str = "YlOrRd",
+    cmap: str = "RdBu_r",
     vmax_percentile: float = 99.0,
     reduce_seq: str = "mean",
     show: bool = True,
@@ -504,7 +510,7 @@ def visualize_prompt_layer_heatmap(
         output_dir: Directory to save the figure. None = do not save.
         figure_format: File format when saving (png, pdf, svg).
         prompt_index: Index label used in the saved filename.
-        cmap: Matplotlib colormap. Default "YlOrRd".
+        cmap: Matplotlib colormap. Default "RdBu_r" (diverging, centered at 0).
         vmax_percentile: Percentile used to clip the color scale. Default 99.
         reduce_seq: How to aggregate across token positions: "mean" (default)
             or "max".
@@ -579,8 +585,11 @@ def visualize_prompt_layer_heatmap(
 
     matrix = np.stack(rows)   # shape: (n_layers, n_bins)
 
-    # Color scale
-    local_vmax = float(np.percentile(matrix, vmax_percentile))
+    # Symmetric signed color scale from absolute percentile
+    abs_bound = float(np.percentile(np.abs(matrix), vmax_percentile))
+    if abs_bound == 0:
+        abs_bound = 1e-12
+    norm = TwoSlopeNorm(vmin=-abs_bound, vcenter=0.0, vmax=abs_bound)
 
     # Plot
     fig_height = max(4, n_layers * 0.52 + 2.5)
@@ -591,8 +600,7 @@ def visualize_prompt_layer_heatmap(
         matrix,
         aspect="auto",
         cmap=cmap,
-        vmin=0,
-        vmax=local_vmax,
+        norm=norm,
         interpolation="nearest",
         origin="upper",
     )
@@ -616,7 +624,8 @@ def visualize_prompt_layer_heatmap(
 
     cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
     cbar.set_label(
-        f"[0 \u2013 {local_vmax:.4f}] (p{int(vmax_percentile)})", fontsize=9
+        f"[-{abs_bound:.4f}, +{abs_bound:.4f}] (p{int(vmax_percentile)} | abs)",
+        fontsize=9,
     )
     cbar.ax.tick_params(labelsize=8)
 
