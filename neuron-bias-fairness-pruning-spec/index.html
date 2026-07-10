@@ -1,0 +1,1267 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A library for structured pruning & Biasd visualization of large language models">
+      
+      
+        <meta name="author" content="Pere Martra">
+      
+      
+        <link rel="canonical" href="https://peremartra.github.io/optipfair/neuron-bias-fairness-pruning-spec/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Technical Specifications: Neuron Bias Analysis & Fairness Pruning Scores - OptiPFair</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#technical-specifications-neuron-bias-analysis-fairness-pruning-scores" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="OptiPFair" class="md-header__button md-logo" aria-label="OptiPFair" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            OptiPFair
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Technical Specifications: Neuron Bias Analysis &amp; Fairness Pruning Scores
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/peremartra/optipfair" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    peremartra/optipfair
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../knowledge_distillation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Knowledge Distillation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../examples/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Examples
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../bias_visualization/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Bias Visualization
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../api/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="OptiPFair" class="md-nav__button md-logo" aria-label="OptiPFair" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    OptiPFair
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/peremartra/optipfair" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    peremartra/optipfair
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../knowledge_distillation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Knowledge Distillation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bias_visualization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bias Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="technical-specifications-neuron-bias-analysis-fairness-pruning-scores">Technical Specifications: Neuron Bias Analysis &amp; Fairness Pruning Scores<a class="headerlink" href="#technical-specifications-neuron-bias-analysis-fairness-pruning-scores" title="Permanent link">&para;</a></h1>
+<h2 id="optipfair-optipfairbias-module">optipfair — <code>optipfair/bias/</code> module<a class="headerlink" href="#optipfair-optipfairbias-module" title="Permanent link">&para;</a></h2>
+<p><strong>Version target:</strong> 0.2.x<br />
+<strong>Author:</strong> Pere Martra<br />
+<strong>Status:</strong> Ready for implementation</p>
+<hr />
+<h2 id="context">Context<a class="headerlink" href="#context" title="Permanent link">&para;</a></h2>
+<p>The current bias module captures activations for individual prompt pairs and returns raw tensors. To support Fairness Pruning research, we need to:</p>
+<ol>
+<li>Allow filtering which layer types are captured during the forward pass (memory optimization for large models) using exact matching from a closed vocabulary.</li>
+<li>Add <code>analyze_neuron_bias</code> — processes a batch of prompt pairs, robustly handling <code>batch_size &gt; 1</code> and asymmetric sequence lengths, and returns an aggregated per-neuron BiasScore.</li>
+<li>Add <code>compute_fairness_pruning_scores</code> — combines BiasScore with ImportanceScore (via the existing <code>compute_neuron_pair_importance_maw</code>) to produce the final FairnessPruningScore per neuron.</li>
+</ol>
+<hr />
+<h2 id="change-1-add-target_layers-parameter-to-register_hooks-process_prompt-and-get_activation_pairs">Change 1 — Add <code>target_layers</code> parameter to <code>register_hooks</code>, <code>process_prompt</code>, and <code>get_activation_pairs</code><a class="headerlink" href="#change-1-add-target_layers-parameter-to-register_hooks-process_prompt-and-get_activation_pairs" title="Permanent link">&para;</a></h2>
+<h3 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h3>
+<p>For large models (7B+), capturing all activations simultaneously consumes significant memory. Filtering at hook registration time avoids storing tensors that will never be used. To ensure multi-architecture support, hook registration must use the existing <code>get_model_layers</code> utility.</p>
+<h3 id="11-register_hooksmodel-target_layersnone">1.1 <code>register_hooks(model, target_layers=None)</code><a class="headerlink" href="#11-register_hooksmodel-target_layersnone" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>optipfair/bias/activations.py</code></p>
+<p><strong>Current signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">register_hooks</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+</code></pre></div></p>
+<p><strong>New signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Literal</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Allowed target layers to prevent accidental string matching.</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Includes &quot;input_norm&quot; for backward compatibility with the current hook</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># that captures input_layernorm activations.</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">ALLOWED_TARGET_LAYERS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="s2">&quot;gate_proj&quot;</span><span class="p">,</span> <span class="s2">&quot;up_proj&quot;</span><span class="p">,</span> <span class="s2">&quot;down_proj&quot;</span><span class="p">,</span> <span class="s2">&quot;down_proj_input&quot;</span><span class="p">,</span> <span class="s2">&quot;mlp_output&quot;</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="s2">&quot;input_norm&quot;</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">})</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">register_hooks</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">target_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+</code></pre></div></p>
+<p><strong>Behavior:</strong>
+- <code>target_layers=None</code> → register hooks on all supported layers, identical to current behavior. No breaking change.
+- <code>target_layers=["gate_proj", "up_proj"]</code> → register hooks only on layers whose key matches exactly the allowed prefixes.
+- <code>target_layers=["down_proj_input"]</code> → register only pre-hook captures at <code>down_proj</code> input, stored as <code>down_proj_input_layer_{i}</code>.
+- <code>target_layers=["down_proj", "down_proj_input"]</code> → capture both post-projection and pre-projection activations with separate key families.
+- If <code>target_layers</code> contains values outside <code>ALLOWED_TARGET_LAYERS</code>, raise <code>ValueError</code> with a clear message listing valid options. Validation uses the <code>frozenset</code> constant at runtime (not <code>Literal</code>, which is not iterable).
+- <strong>Matching logic:</strong> Instead of a generic substring match (<code>if "gate" in name</code>), use exact prefix matching from the closed vocabulary to avoid accidental captures.
+- <strong>Implementation note:</strong> Remove the current hardcoded <code>try/elif</code> blocks (<code>model.model.layers</code>, <code>model.transformer.h</code>, etc.). Instead, import and use <code>get_model_layers(model)</code> from <code>optipfair.pruning.utils</code> to iterate over the layers dynamically. This introduces a new cross-module dependency (<code>bias/</code> → <code>pruning/utils</code>), which is acceptable since <code>pruning.utils</code> contains architecture-agnostic utilities.
+- <strong>Backward compatibility:</strong> The current code captures 6 hook types per layer: <code>attention_output</code>, <code>mlp_output</code>, <code>gate_proj</code>, <code>up_proj</code>, <code>down_proj</code>, and <code>input_norm</code>. All 6 must continue to be captured when <code>target_layers=None</code>.</p>
+<h3 id="111-down_proj-vs-down_proj_input-semantics">1.1.1 <code>down_proj</code> vs <code>down_proj_input</code> semantics<a class="headerlink" href="#111-down_proj-vs-down_proj_input-semantics" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>down_proj</code> captures the output of <code>down_proj</code> and remains unchanged (shape <code>[B, S, hidden_size]</code>).</li>
+<li><code>down_proj_input</code> captures the input to <code>down_proj</code> using a forward pre-hook (shape <code>[B, S, intermediate_size]</code>).</li>
+<li><code>down_proj_input</code> is explicit opt-in and must not be included implicitly when <code>target_layers=None</code>.</li>
+</ul>
+<h3 id="12-process_promptmodel-tokenizer-prompt-target_layersnone">1.2 <code>process_prompt(model, tokenizer, prompt, target_layers=None)</code><a class="headerlink" href="#12-process_promptmodel-tokenizer-prompt-target_layersnone" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>optipfair/bias/activations.py</code></p>
+<p><strong>Current signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">process_prompt</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span><span class="p">,</span> <span class="n">prompt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+</code></pre></div></p>
+<p><strong>New signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">process_prompt</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span><span class="p">,</span> <span class="n">prompt</span><span class="p">,</span> <span class="n">target_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+</code></pre></div></p>
+<p><strong>Behavior:</strong>
+- <code>target_layers=None</code> → passes <code>None</code> to <code>register_hooks</code>, captures all layers. No breaking change.
+- <code>target_layers=[...]</code> → propagated to <code>register_hooks</code>.</p>
+<h3 id="13-get_activation_pairsmodel-tokenizer-prompt1-prompt2-target_layersnone">1.3 <code>get_activation_pairs(model, tokenizer, prompt1, prompt2, target_layers=None)</code><a class="headerlink" href="#13-get_activation_pairsmodel-tokenizer-prompt1-prompt2-target_layersnone" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>optipfair/bias/activations.py</code></p>
+<p><strong>Current signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_activation_pairs</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span><span class="p">,</span> <span class="n">prompt1</span><span class="p">,</span> <span class="n">prompt2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+</code></pre></div></p>
+<p><strong>New signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_activation_pairs</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span><span class="p">,</span> <span class="n">prompt1</span><span class="p">,</span> <span class="n">prompt2</span><span class="p">,</span> <span class="n">target_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+</code></pre></div></p>
+<p><strong>Behavior:</strong>
+- <code>target_layers=None</code> → captures all layers. No breaking change.
+- <code>target_layers=[...]</code> → propagated to both <code>process_prompt</code> calls.</p>
+<hr />
+<h2 id="change-2-new-function-analyze_neuron_bias">Change 2 — New function <code>analyze_neuron_bias</code><a class="headerlink" href="#change-2-new-function-analyze_neuron_bias" title="Permanent link">&para;</a></h2>
+<h3 id="signature">Signature<a class="headerlink" href="#signature" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">analyze_neuron_bias</span><span class="p">(</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">model</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">tokenizer</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">prompt_pairs</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">target_layers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="s2">&quot;mean&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">show_progress</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+</code></pre></div>
+<p><strong>File:</strong> <code>optipfair/bias/activations.py</code></p>
+<h3 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td>HF CausalLM</td>
+<td>required</td>
+<td>Model to analyze</td>
+</tr>
+<tr>
+<td><code>tokenizer</code></td>
+<td>HF Tokenizer</td>
+<td>required</td>
+<td>Matching tokenizer</td>
+</tr>
+<tr>
+<td><code>prompt_pairs</code></td>
+<td><code>List[Tuple[str, str]]</code></td>
+<td>required</td>
+<td>Prompt pairs differing only in demographic attribute</td>
+</tr>
+<tr>
+<td><code>target_layers</code></td>
+<td><code>Optional[List[str]]</code></td>
+<td><code>None</code></td>
+<td>Layer type prefixes to capture. <code>None</code> defaults internally to <code>["gate_proj", "up_proj"]</code></td>
+</tr>
+<tr>
+<td><code>aggregation</code></td>
+<td><code>str</code></td>
+<td><code>"mean"</code></td>
+<td>Aggregation across pairs: <code>"mean"</code> or <code>"max"</code></td>
+</tr>
+<tr>
+<td><code>show_progress</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Show tqdm progress bar</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note on <code>target_layers</code> default:</strong> inside <code>analyze_neuron_bias</code>, <code>None</code> is resolved to <code>["gate_proj", "up_proj"]</code> because these are the layers relevant for MLP GLU fairness pruning. This avoids capturing unnecessary activations. <strong>Important:</strong> this differs from <code>register_hooks</code> where <code>None</code> means "all layers". This is intentional — <code>analyze_neuron_bias</code> is optimized for the fairness pruning use case.</p>
+<p><strong>Note on <code>prompt_pairs</code> input:</strong> expects a plain Python list of tuples <code>(prompt_1, prompt_2)</code>.</p>
+</blockquote>
+<h3 id="return-value">Return value<a class="headerlink" href="#return-value" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span>
+</code></pre></div>
+<p>A dictionary mapping layer keys to per-neuron aggregated BiasScore tensors of shape <code>[intermediate_size]</code>. All returned tensors are on CPU.</p>
+<h3 id="internal-logic-robust-against-batch-sizes-and-varying-sequence-lengths">Internal logic (Robust against batch sizes and varying sequence lengths)<a class="headerlink" href="#internal-logic-robust-against-batch-sizes-and-varying-sequence-lengths" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">tqdm</span><span class="w"> </span><span class="kn">import</span> <span class="n">tqdm</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Resolve default target_layers</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">if</span> <span class="n">target_layers</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">target_layers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;gate_proj&quot;</span><span class="p">,</span> <span class="s2">&quot;up_proj&quot;</span><span class="p">]</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Validate aggregation</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="k">if</span> <span class="n">aggregation</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;mean&quot;</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">):</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;aggregation must be &#39;mean&#39; or &#39;max&#39;, got &#39;</span><span class="si">{</span><span class="n">aggregation</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># Validate prompt pairs</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">prompt_pairs</span><span class="p">:</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;prompt_pairs cannot be empty&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="n">pairs</span> <span class="o">=</span> <span class="n">prompt_pairs</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Initialize accumulator: layer_key → List[Tensor of shape [intermediate_size]]</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="n">accumulated_diffs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="k">for</span> <span class="n">prompt_1</span><span class="p">,</span> <span class="n">prompt_2</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">disable</span><span class="o">=</span><span class="ow">not</span> <span class="n">show_progress</span><span class="p">,</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>                                <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Analyzing bias across prompt pairs&quot;</span><span class="p">):</span>
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>    <span class="n">act1</span><span class="p">,</span> <span class="n">act2</span> <span class="o">=</span> <span class="n">get_activation_pairs</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span><span class="p">,</span> <span class="n">prompt_1</span><span class="p">,</span> <span class="n">prompt_2</span><span class="p">,</span>
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>                                       <span class="n">target_layers</span><span class="o">=</span><span class="n">target_layers</span><span class="p">)</span>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>    <span class="k">for</span> <span class="n">layer_key</span> <span class="ow">in</span> <span class="n">act1</span><span class="p">:</span>
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>        <span class="k">if</span> <span class="n">layer_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">act2</span><span class="p">:</span>
+<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>            <span class="k">continue</span>
+<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>
+<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>        <span class="c1"># STRATEGY FOR VARYING SEQUENCE LENGTHS &amp; BATCH SIZE &gt; 1:</span>
+<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>        <span class="c1"># We cannot do act1 - act2 directly because token lengths might differ.</span>
+<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>        <span class="c1"># Step 1: Mean pooling over all dimensions except the last one</span>
+<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>        <span class="c1"># (supports [B,S,I] and other shapes where the last dim is neuron index).</span>
+<a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>        <span class="n">act1_tensor</span> <span class="o">=</span> <span class="n">act1</span><span class="p">[</span><span class="n">layer_key</span><span class="p">]</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+<a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>        <span class="n">act2_tensor</span> <span class="o">=</span> <span class="n">act2</span><span class="p">[</span><span class="n">layer_key</span><span class="p">]</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+<a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>
+<a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>        <span class="n">reduce_dims_1</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">act1_tensor</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>        <span class="n">reduce_dims_2</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">act2_tensor</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>
+<a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">reduce_dims_1</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">reduce_dims_2</span><span class="p">:</span>
+<a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Activation tensor for </span><span class="si">{</span><span class="n">layer_key</span><span class="si">}</span><span class="s2"> must have at least 2 dimensions&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a>
+<a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a>        <span class="n">act1_pooled</span> <span class="o">=</span> <span class="n">act1_tensor</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">reduce_dims_1</span><span class="p">)</span>
+<a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a>        <span class="n">act2_pooled</span> <span class="o">=</span> <span class="n">act2_tensor</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">reduce_dims_2</span><span class="p">)</span>
+<a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a>
+<a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a>        <span class="c1"># Step 2: Compute absolute difference on the pooled representations</span>
+<a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a>        <span class="n">neuron_diff</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">act1_pooled</span> <span class="o">-</span> <span class="n">act2_pooled</span><span class="p">)</span> 
+<a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a>
+<a id="__codelineno-8-48" name="__codelineno-8-48" href="#__codelineno-8-48"></a>        <span class="k">if</span> <span class="n">layer_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">accumulated_diffs</span><span class="p">:</span>
+<a id="__codelineno-8-49" name="__codelineno-8-49" href="#__codelineno-8-49"></a>            <span class="n">accumulated_diffs</span><span class="p">[</span><span class="n">layer_key</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-8-50" name="__codelineno-8-50" href="#__codelineno-8-50"></a>
+<a id="__codelineno-8-51" name="__codelineno-8-51" href="#__codelineno-8-51"></a>        <span class="n">accumulated_diffs</span><span class="p">[</span><span class="n">layer_key</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">neuron_diff</span><span class="o">.</span><span class="n">cpu</span><span class="p">())</span>  <span class="c1"># Move to CPU to save VRAM</span>
+<a id="__codelineno-8-52" name="__codelineno-8-52" href="#__codelineno-8-52"></a>
+<a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a><span class="c1"># Aggregate accumulated diffs across all prompt pairs</span>
+<a id="__codelineno-8-54" name="__codelineno-8-54" href="#__codelineno-8-54"></a><span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-8-55" name="__codelineno-8-55" href="#__codelineno-8-55"></a><span class="k">for</span> <span class="n">layer_key</span><span class="p">,</span> <span class="n">diffs_list</span> <span class="ow">in</span> <span class="n">accumulated_diffs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-8-56" name="__codelineno-8-56" href="#__codelineno-8-56"></a>    <span class="n">stacked</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">diffs_list</span><span class="p">)</span>  <span class="c1"># [num_pairs, intermediate_size]</span>
+<a id="__codelineno-8-57" name="__codelineno-8-57" href="#__codelineno-8-57"></a>    <span class="k">if</span> <span class="n">aggregation</span> <span class="o">==</span> <span class="s2">&quot;mean&quot;</span><span class="p">:</span>
+<a id="__codelineno-8-58" name="__codelineno-8-58" href="#__codelineno-8-58"></a>        <span class="n">result</span><span class="p">[</span><span class="n">layer_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">stacked</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-8-59" name="__codelineno-8-59" href="#__codelineno-8-59"></a>    <span class="k">elif</span> <span class="n">aggregation</span> <span class="o">==</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span>
+<a id="__codelineno-8-60" name="__codelineno-8-60" href="#__codelineno-8-60"></a>        <span class="n">result</span><span class="p">[</span><span class="n">layer_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">stacked</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+<a id="__codelineno-8-61" name="__codelineno-8-61" href="#__codelineno-8-61"></a>
+<a id="__codelineno-8-62" name="__codelineno-8-62" href="#__codelineno-8-62"></a><span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+<hr />
+<h2 id="change-3-new-function-compute_fairness_pruning_scores">Change 3 — New function <code>compute_fairness_pruning_scores</code><a class="headerlink" href="#change-3-new-function-compute_fairness_pruning_scores" title="Permanent link">&para;</a></h2>
+<h3 id="motivation_1">Motivation<a class="headerlink" href="#motivation_1" title="Permanent link">&para;</a></h3>
+<p>Combines <code>BiasScore_i</code> with <code>ImportanceScore_i</code> (via <code>compute_neuron_pair_importance_maw</code>).</p>
+<p><strong>FairnessPruningScore formula:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>FairnessPruningScore_i = bias_weight × BiasScore_norm_i
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>                       + (1 - bias_weight) × (1 - ImportanceScore_norm_i)
+</code></pre></div></p>
+<p>A high FairnessPruningScore means the neuron is a strong pruning candidate: high bias sensitivity AND/OR low structural importance.</p>
+<h3 id="signature_1">Signature<a class="headerlink" href="#signature_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">compute_fairness_pruning_scores</span><span class="p">(</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">model</span><span class="p">,</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">bias_scores</span><span class="p">,</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">bias_weight</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+</code></pre></div>
+<p><strong>File:</strong> <code>optipfair/bias/activations.py</code></p>
+<h3 id="internal-logic">Internal logic<a class="headerlink" href="#internal-logic" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">optipfair.pruning.mlp_glu</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_neuron_pair_importance_maw</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">optipfair.pruning.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_model_layers</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">_normalize</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="sd">    Min-max normalization to [0, 1].</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="sd">    If max == min (e.g., all values are identical), returns a tensor of zeros </span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="sd">    to prevent division by zero, representing no relative differences.</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="n">t_min</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>    <span class="n">t_max</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>    <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">t_max</span><span class="p">,</span> <span class="n">t_min</span><span class="p">):</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">t</span> <span class="o">-</span> <span class="n">t_min</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">t_max</span> <span class="o">-</span> <span class="n">t_min</span> <span class="o">+</span> <span class="mf">1e-8</span><span class="p">)</span>
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="k">def</span><span class="w"> </span><span class="nf">compute_fairness_pruning_scores</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">bias_scores</span><span class="p">,</span> <span class="n">bias_weight</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>
+<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>    <span class="c1"># Validate parameters</span>
+<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">bias_weight</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+<a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bias_weight must be in [0.0, 1.0], got </span><span class="si">{</span><span class="n">bias_weight</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>
+<a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">bias_scores</span><span class="p">:</span>
+<a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;bias_scores dictionary is empty&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a>
+<a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a>    <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a>
+<a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a>    <span class="c1"># Multi-architecture support</span>
+<a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a>    <span class="n">layers</span> <span class="o">=</span> <span class="n">get_model_layers</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+<a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a>
+<a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a>    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layers</span><span class="p">):</span>
+<a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a>
+<a id="__codelineno-11-32" name="__codelineno-11-32" href="#__codelineno-11-32"></a>        <span class="n">gate_bias_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;gate_proj_layer_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-11-33" name="__codelineno-11-33" href="#__codelineno-11-33"></a>        <span class="n">up_bias_key</span>   <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;up_proj_layer_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-11-34" name="__codelineno-11-34" href="#__codelineno-11-34"></a>
+<a id="__codelineno-11-35" name="__codelineno-11-35" href="#__codelineno-11-35"></a>        <span class="n">available</span> <span class="o">=</span> <span class="p">[</span><span class="n">bias_scores</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">(</span><span class="n">gate_bias_key</span><span class="p">,</span> <span class="n">up_bias_key</span><span class="p">)</span>
+<a id="__codelineno-11-36" name="__codelineno-11-36" href="#__codelineno-11-36"></a>                     <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">bias_scores</span><span class="p">]</span>
+<a id="__codelineno-11-37" name="__codelineno-11-37" href="#__codelineno-11-37"></a>
+<a id="__codelineno-11-38" name="__codelineno-11-38" href="#__codelineno-11-38"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">available</span><span class="p">:</span>
+<a id="__codelineno-11-39" name="__codelineno-11-39" href="#__codelineno-11-39"></a>            <span class="k">continue</span>
+<a id="__codelineno-11-40" name="__codelineno-11-40" href="#__codelineno-11-40"></a>
+<a id="__codelineno-11-41" name="__codelineno-11-41" href="#__codelineno-11-41"></a>        <span class="n">bias</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">available</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-11-42" name="__codelineno-11-42" href="#__codelineno-11-42"></a>
+<a id="__codelineno-11-43" name="__codelineno-11-43" href="#__codelineno-11-43"></a>        <span class="c1"># Static ImportanceScore from weights (Ensure layer is GLU)</span>
+<a id="__codelineno-11-44" name="__codelineno-11-44" href="#__codelineno-11-44"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="s2">&quot;mlp&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">mlp</span><span class="p">,</span> <span class="s2">&quot;gate_proj&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">mlp</span><span class="p">,</span> <span class="s2">&quot;up_proj&quot;</span><span class="p">):</span>
+<a id="__codelineno-11-45" name="__codelineno-11-45" href="#__codelineno-11-45"></a>            <span class="k">continue</span>
+<a id="__codelineno-11-46" name="__codelineno-11-46" href="#__codelineno-11-46"></a>
+<a id="__codelineno-11-47" name="__codelineno-11-47" href="#__codelineno-11-47"></a>        <span class="n">gate_weight</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">mlp</span><span class="o">.</span><span class="n">gate_proj</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+<a id="__codelineno-11-48" name="__codelineno-11-48" href="#__codelineno-11-48"></a>        <span class="n">up_weight</span>   <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">mlp</span><span class="o">.</span><span class="n">up_proj</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+<a id="__codelineno-11-49" name="__codelineno-11-49" href="#__codelineno-11-49"></a>        <span class="n">importance</span>  <span class="o">=</span> <span class="n">compute_neuron_pair_importance_maw</span><span class="p">(</span><span class="n">gate_weight</span><span class="p">,</span> <span class="n">up_weight</span><span class="p">)</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+<a id="__codelineno-11-50" name="__codelineno-11-50" href="#__codelineno-11-50"></a>
+<a id="__codelineno-11-51" name="__codelineno-11-51" href="#__codelineno-11-51"></a>        <span class="n">bias_norm</span>       <span class="o">=</span> <span class="n">_normalize</span><span class="p">(</span><span class="n">bias</span><span class="p">)</span>
+<a id="__codelineno-11-52" name="__codelineno-11-52" href="#__codelineno-11-52"></a>        <span class="n">importance_norm</span> <span class="o">=</span> <span class="n">_normalize</span><span class="p">(</span><span class="n">importance</span><span class="p">)</span>
+<a id="__codelineno-11-53" name="__codelineno-11-53" href="#__codelineno-11-53"></a>
+<a id="__codelineno-11-54" name="__codelineno-11-54" href="#__codelineno-11-54"></a>        <span class="n">fairness_score</span> <span class="o">=</span> <span class="p">(</span><span class="n">bias_weight</span> <span class="o">*</span> <span class="n">bias_norm</span>
+<a id="__codelineno-11-55" name="__codelineno-11-55" href="#__codelineno-11-55"></a>                         <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">bias_weight</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">importance_norm</span><span class="p">))</span>
+<a id="__codelineno-11-56" name="__codelineno-11-56" href="#__codelineno-11-56"></a>
+<a id="__codelineno-11-57" name="__codelineno-11-57" href="#__codelineno-11-57"></a>        <span class="n">result</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">fairness_score</span>
+<a id="__codelineno-11-58" name="__codelineno-11-58" href="#__codelineno-11-58"></a>
+<a id="__codelineno-11-59" name="__codelineno-11-59" href="#__codelineno-11-59"></a>    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+<hr />
+<h2 id="phase-22-integration-plan-using-fairnesspruningscores-in-prune_model">Phase 2.2 Integration Plan — Using FairnessPruningScores in <code>prune_model</code><a class="headerlink" href="#phase-22-integration-plan-using-fairnesspruningscores-in-prune_model" title="Permanent link">&para;</a></h2>
+<h3 id="current-limitation">Current Limitation<a class="headerlink" href="#current-limitation" title="Permanent link">&para;</a></h3>
+<p>Currently, <code>prune_model()</code> and <code>prune_model_mlp_glu()</code> only accept neuron importance via string enumeration (<code>neuron_selection_method="MAW"</code>, etc.), which are computed internally. The <code>compute_fairness_pruning_scores()</code> returns precomputed tensors that cannot be directly injected into the pruning pipeline.</p>
+<h3 id="proposed-solution-phase-22">Proposed Solution (Phase 2.2)<a class="headerlink" href="#proposed-solution-phase-22" title="Permanent link">&para;</a></h3>
+<p>To enable end-to-end fairness-aware pruning, two functions require modification:</p>
+<h4 id="221-prune_neuron_pairs-accept-pre-computed-scores">2.2.1 <code>prune_neuron_pairs()</code> — Accept pre-computed scores<a class="headerlink" href="#221-prune_neuron_pairs-accept-pre-computed-scores" title="Permanent link">&para;</a></h4>
+<p><strong>Current signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">prune_neuron_pairs</span><span class="p">(</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="n">mlp</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">prune_percentage</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">importance_fn</span><span class="p">:</span> <span class="n">Callable</span> <span class="o">=</span> <span class="n">compute_neuron_pair_importance_maw</span><span class="p">,</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">activation_norms</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="n">layer_idx</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    <span class="n">expansion_divisor</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+</code></pre></div></p>
+<p><strong>Modified signature (Phase 2.2):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">prune_neuron_pairs</span><span class="p">(</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="n">mlp</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">prune_percentage</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">importance_fn</span><span class="p">:</span> <span class="n">Callable</span> <span class="o">=</span> <span class="n">compute_neuron_pair_importance_maw</span><span class="p">,</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">activation_norms</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">layer_idx</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="n">expansion_divisor</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>    <span class="n">custom_importance_scores</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+</code></pre></div></p>
+<p><strong>New logic:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">if</span> <span class="n">custom_importance_scores</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="c1"># Use pre-computed scores (e.g., from fairness pruning)</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="k">if</span> <span class="n">custom_importance_scores</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">mlp</span><span class="o">.</span><span class="n">gate_proj</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;custom_importance_scores shape mismatch&quot;</span><span class="p">)</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="n">importance_scores</span> <span class="o">=</span> <span class="n">custom_importance_scores</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>    <span class="c1"># Fall back to internal computation (existing behavior)</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>    <span class="k">if</span> <span class="n">activation_norms</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>        <span class="n">importance_scores</span> <span class="o">=</span> <span class="n">compute_neuron_pair_importance_maw_hybrid</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>        <span class="n">importance_scores</span> <span class="o">=</span> <span class="n">importance_fn</span><span class="p">(</span><span class="n">gate_weight</span><span class="p">,</span> <span class="n">up_weight</span><span class="p">)</span>
+</code></pre></div></p>
+<blockquote>
+<p><strong>CRITICAL — Score semantics:</strong> <code>prune_neuron_pairs</code> uses <code>torch.topk(importance_scores, k, largest=True)</code>, meaning it <strong>keeps</strong> neurons with the <strong>highest</strong> scores. However, <code>FairnessPruningScore</code> is designed so that <strong>high = prune candidate</strong>. Therefore, when injecting fairness scores, they must be <strong>inverted</strong> before being used as <code>custom_importance_scores</code>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">custom_importance_scores</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">fairness_scores</span><span class="p">[</span><span class="n">layer_idx</span><span class="p">]</span>
+</code></pre></div>
+This inversion converts "high bias → prune" into "low importance → prune", which aligns with the existing <code>topk(largest=True)</code> logic.</p>
+</blockquote>
+<h4 id="222-prune_model_mlp_glu-accept-fairness-score-dict">2.2.2 <code>prune_model_mlp_glu()</code> — Accept fairness score dict<a class="headerlink" href="#222-prune_model_mlp_glu-accept-fairness-score-dict" title="Permanent link">&para;</a></h4>
+<p><strong>Current signature:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">prune_model_mlp_glu</span><span class="p">(</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="n">model</span><span class="p">:</span> <span class="n">PreTrainedModel</span><span class="p">,</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="n">neuron_selection_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;PPM&quot;</span><span class="p">,</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="n">pruning_percentage</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="o">...</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PreTrainedModel</span><span class="p">:</span>
+</code></pre></div></p>
+<p><strong>Modified signature (Phase 2.2):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">prune_model_mlp_glu</span><span class="p">(</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="n">model</span><span class="p">:</span> <span class="n">PreTrainedModel</span><span class="p">,</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">neuron_selection_method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;PPM&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">pruning_percentage</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="o">...</span><span class="p">,</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="n">fairness_scores</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PreTrainedModel</span><span class="p">:</span>
+</code></pre></div></p>
+<p><strong>New logic in pruning loop:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">for</span> <span class="n">layer_idx</span><span class="p">,</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layers_to_prune</span><span class="p">):</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>    <span class="c1"># Select scores based on fairness or neuron_selection_method</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>    <span class="k">if</span> <span class="n">fairness_scores</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">layer_idx</span> <span class="ow">in</span> <span class="n">fairness_scores</span><span class="p">:</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>        <span class="c1"># INVERT: FairnessPruningScore high = prune candidate,</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>        <span class="c1"># but topk(largest=True) keeps highest scores.</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>        <span class="n">custom_scores</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">fairness_scores</span><span class="p">[</span><span class="n">layer_idx</span><span class="p">]</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>        <span class="n">custom_scores</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>    <span class="c1"># Prune with appropriate scores</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>    <span class="n">prune_neuron_pairs</span><span class="p">(</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>        <span class="n">mlp</span><span class="o">=</span><span class="n">layer</span><span class="o">.</span><span class="n">mlp</span><span class="p">,</span>
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>        <span class="n">prune_percentage</span><span class="o">=</span><span class="n">prune_percentage</span><span class="p">,</span>
+<a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>        <span class="o">...</span><span class="p">,</span>
+<a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>        <span class="n">custom_importance_scores</span><span class="o">=</span><span class="n">custom_scores</span><span class="p">,</span>
+<a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>    <span class="p">)</span>
+</code></pre></div></p>
+<h4 id="223-example-usage-phase-22">2.2.3 Example usage (Phase 2.2)<a class="headerlink" href="#223-example-usage-phase-22" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">optipfair</span><span class="w"> </span><span class="kn">import</span> <span class="n">prune_model</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">optipfair.bias</span><span class="w"> </span><span class="kn">import</span> <span class="n">analyze_neuron_bias</span><span class="p">,</span> <span class="n">compute_fairness_pruning_scores</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Step 1: Compute bias and fairness scores</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="n">bias_scores</span> <span class="o">=</span> <span class="n">analyze_neuron_bias</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span><span class="p">,</span> <span class="n">prompt_pairs</span><span class="p">)</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="n">fairness_scores</span> <span class="o">=</span> <span class="n">compute_fairness_pruning_scores</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">bias_scores</span><span class="p">,</span> <span class="n">bias_weight</span><span class="o">=</span><span class="mf">0.6</span><span class="p">)</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="c1"># Step 2: Prune using fairness scores</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="n">pruned_model</span> <span class="o">=</span> <span class="n">prune_model</span><span class="p">(</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>    <span class="n">model</span><span class="p">,</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>    <span class="n">pruning_type</span><span class="o">=</span><span class="s2">&quot;MLP_GLU&quot;</span><span class="p">,</span>
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>    <span class="n">pruning_percentage</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>    <span class="n">fairness_scores</span><span class="o">=</span><span class="n">fairness_scores</span><span class="p">,</span>  <span class="c1"># NEW parameter (Phase 2.2)</span>
+<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="implementation-notes">Implementation Notes<a class="headerlink" href="#implementation-notes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The <code>fairness_scores</code> parameter is <strong>optional</strong> to maintain backward compatibility.</li>
+<li>If both <code>neuron_selection_method</code> and <code>fairness_scores</code> are provided, <code>fairness_scores</code> takes precedence.</li>
+<li>Tensors in <code>fairness_scores</code> must be on CPU and match the intermediate size of each layer.</li>
+<li>This change is <strong>non-breaking</strong>: existing code without <code>fairness_scores</code> continues to work unchanged.</li>
+</ul>
+<hr />
+<h2 id="changes-to-__init__py">Changes to <code>__init__.py</code><a class="headerlink" href="#changes-to-__init__py" title="Permanent link">&para;</a></h2>
+<p><strong>File:</strong> <code>optipfair/bias/__init__.py</code></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">.visualization</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>    <span class="n">visualize_bias</span><span class="p">,</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">visualize_mean_differences</span><span class="p">,</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">visualize_heatmap</span><span class="p">,</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    <span class="n">visualize_pca</span><span class="p">,</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="p">)</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">.metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">calculate_bias_metrics</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="kn">from</span><span class="w"> </span><span class="nn">.activations</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>    <span class="n">get_activation_pairs</span><span class="p">,</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>    <span class="n">analyze_neuron_bias</span><span class="p">,</span>
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>    <span class="n">compute_fairness_pruning_scores</span><span class="p">,</span>
+<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="p">)</span>
+<a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>
+<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a>    <span class="s2">&quot;visualize_bias&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>    <span class="s2">&quot;visualize_mean_differences&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a>    <span class="s2">&quot;visualize_heatmap&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a>    <span class="s2">&quot;visualize_pca&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a>    <span class="s2">&quot;calculate_bias_metrics&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a>    <span class="s2">&quot;get_activation_pairs&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a>    <span class="s2">&quot;analyze_neuron_bias&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a>    <span class="s2">&quot;compute_fairness_pruning_scores&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a><span class="p">]</span>
+</code></pre></div>
+<hr />
+<h2 id="testing-checklist">Testing checklist<a class="headerlink" href="#testing-checklist" title="Permanent link">&para;</a></h2>
+<h3 id="change-1-target_layers-propagation-architecture">Change 1 — <code>target_layers</code> propagation &amp; Architecture<a class="headerlink" href="#change-1-target_layers-propagation-architecture" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] <code>register_hooks(model)</code> uses <code>get_model_layers(model)</code> and captures all compatible layers correctly.</li>
+<li>[ ] <strong>BACKWARD COMPAT:</strong> <code>register_hooks(model)</code> with no arguments captures the same 6 hook types as before: <code>attention_output</code>, <code>mlp_output</code>, <code>gate_proj</code>, <code>up_proj</code>, <code>down_proj</code>, <code>input_norm</code>.</li>
+<li>[ ] <code>register_hooks(model, target_layers=["gate_proj"])</code> strictly matches <code>gate_proj</code> prefix (no accidental substring matches).</li>
+<li>[ ] <code>register_hooks(model, target_layers=["invalid"])</code> raises <code>ValueError</code>.</li>
+<li>[ ] <strong>BACKWARD COMPAT:</strong> <code>process_prompt(model, tokenizer, prompt)</code> (without <code>target_layers</code>) returns the same keys as before.</li>
+<li>[ ] <strong>BACKWARD COMPAT:</strong> <code>get_activation_pairs(model, tokenizer, p1, p2)</code> (without <code>target_layers</code>) returns the same keys as before.</li>
+<li>[ ] <code>process_prompt</code> and <code>get_activation_pairs</code> — propagation tests with explicit <code>target_layers</code>.</li>
+</ul>
+<h3 id="analyze_neuron_bias"><code>analyze_neuron_bias</code><a class="headerlink" href="#analyze_neuron_bias" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] <strong>CRITICAL:</strong> Tests with input pairs where <code>len(prompt_1) != len(prompt_2)</code> execute without <code>RuntimeError</code> due to shape mismatch.</li>
+<li>[ ] <strong>CRITICAL:</strong> Tests with <code>batch_size &gt; 1</code> correctly reduce to <code>[intermediate_size]</code> without throwing dimension errors.</li>
+<li>[ ] Accepts plain list of tuples correctly.</li>
+<li>[ ] Return tensors are on CPU and shape is exactly <code>[intermediate_size]</code>.</li>
+<li>[ ] <code>target_layers=None</code> resolves to <code>["gate_proj", "up_proj"]</code>.</li>
+<li>[ ] <code>aggregation="max"</code> returns max across pairs.</li>
+<li>[ ] Empty <code>prompt_pairs</code> list raises clear error.</li>
+<li>[ ] tqdm progress bar works without raising <code>NameError</code>.</li>
+</ul>
+<h3 id="compute_fairness_pruning_scores"><code>compute_fairness_pruning_scores</code><a class="headerlink" href="#compute_fairness_pruning_scores" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Compatible with non-LLaMA architectures using <code>get_model_layers(model)</code>.</li>
+<li>[ ] Return keys are layer indices (<code>int</code>), shape is <code>[intermediate_size]</code>, on CPU.</li>
+<li>[ ] <code>bias_weight=1.0</code> (pure bias) and <code>bias_weight=0.0</code> (pure importance) behave correctly.</li>
+<li>[ ] Out-of-bounds <code>bias_weight</code> raises <code>ValueError</code>.</li>
+<li>[ ] Empty <code>bias_scores</code> raises <code>ValueError</code>.</li>
+<li>[ ] Normalization handles <code>max == min</code> safely (returns tensor of zeros).</li>
+<li>[ ] Layers missing expected GLU attributes are skipped gracefully.</li>
+</ul>
+<h3 id="integration">Integration<a class="headerlink" href="#integration" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] No OOM on Llama-3.2-3B with 100 pairs on Colab A100.</li>
+</ul>
+<h3 id="backward-compatibility-regression">Backward Compatibility (regression)<a class="headerlink" href="#backward-compatibility-regression" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] All existing tests in <code>test_bias_visualization.py</code> pass without modification.</li>
+<li>[ ] <code>visualization.py</code> functions (<code>visualize_bias</code>, <code>visualize_mean_differences</code>, etc.) work without changes — they call <code>get_activation_pairs</code> without <code>target_layers</code> and must continue to receive all hook types.</li>
+<li>[ ] <code>bias/__init__.py</code> continues to export all existing symbols. New exports (<code>analyze_neuron_bias</code>, <code>compute_fairness_pruning_scores</code>) are additive only.</li>
+<li>[ ] <code>completebias_test.py</code> and example notebooks continue to work unchanged.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 OptiPFair Contributors
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/peremartra" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/optipfair/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "toc.integrate", "search.suggest", "search.highlight", "content.tabs.link", "content.code.annotation", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
