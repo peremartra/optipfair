@@ -25,6 +25,7 @@ from optipfair.bias.activations import (
     select_layers,
 )
 from optipfair.bias.visualization import visualize_prompt_heatmap
+from optipfair.bias.visualization import visualize_prompt_layer_heatmap
 from optipfair.bias.metrics import (
     calculate_activation_differences,
     calculate_bias_metrics,
@@ -425,6 +426,98 @@ class TestVisualizePromptHeatmap(unittest.TestCase):
         """visualize_prompt_heatmap is importable from optipfair.bias."""
         from optipfair.bias import visualize_prompt_heatmap as vph
         self.assertTrue(callable(vph))
+
+
+class TestVisualizePromptLayerHeatmap(unittest.TestCase):
+    """Tests for visualize_prompt_layer_heatmap (layer x neuron-bin heatmap)."""
+
+    def setUp(self):
+        self.model = MockModel()
+        self.tokenizer = MagicMock()
+        tokenizer_output = MagicMock()
+        tokenizer_output.input_ids = torch.tensor([[1, 2, 3]])
+        tokenizer_output.to = MagicMock(return_value=tokenizer_output)
+        self.tokenizer.return_value = tokenizer_output
+
+        # Mock activations: 4 layers, B=1, S=5, H=256
+        self.mock_activations = {
+            f"gate_proj_layer_{i}": torch.rand(1, 5, 256)
+            for i in range(4)
+        }
+
+    def test_runs_without_error(self):
+        """visualize_prompt_layer_heatmap completes without raising."""
+        with patch("optipfair.bias.visualization.get_prompt_activations") as mock_gpa, \
+             patch("matplotlib.pyplot.show"):
+            mock_gpa.return_value = self.mock_activations
+            visualize_prompt_layer_heatmap(
+                self.model,
+                self.tokenizer,
+                "test prompt",
+                layer_type="gate_proj",
+                bin_size=64,
+                show=False,
+            )
+
+    def test_matrix_shape_layers_x_bins(self):
+        """Matrix shape is (n_layers, n_bins) = (4, 256 // 64)."""
+        import matplotlib
+        matplotlib.use("Agg")
+
+        captured = {}
+
+        original_imshow = plt.Axes.imshow
+        def fake_imshow(self_ax, data, **kwargs):
+            captured["matrix"] = data
+            return original_imshow(self_ax, data, **kwargs)
+
+        with patch("optipfair.bias.visualization.get_prompt_activations") as mock_gpa, \
+             patch("matplotlib.pyplot.show"), \
+             patch("matplotlib.axes.Axes.imshow", fake_imshow):
+            mock_gpa.return_value = self.mock_activations
+            visualize_prompt_layer_heatmap(
+                self.model,
+                self.tokenizer,
+                "test prompt",
+                layer_type="gate_proj",
+                bin_size=64,
+                show=False,
+            )
+
+        self.assertIn("matrix", captured)
+        # 4 layers, H=256, bin_size=64 => n_bins=4
+        self.assertEqual(captured["matrix"].shape, (4, 4))
+
+    def test_warns_on_empty_activations(self):
+        """Warning issued when no activations are captured."""
+        with patch("optipfair.bias.visualization.get_prompt_activations") as mock_gpa, \
+             patch("optipfair.bias.visualization.logger") as mock_logger:
+            mock_gpa.return_value = {}
+            visualize_prompt_layer_heatmap(
+                self.model, self.tokenizer, "test", layer_type="gate_proj", show=False
+            )
+            mock_logger.warning.assert_called()
+
+    def test_warns_on_no_matching_keys(self):
+        """Warning issued when layer_type has no matching keys."""
+        with patch("optipfair.bias.visualization.get_prompt_activations") as mock_gpa, \
+             patch("optipfair.bias.visualization.logger") as mock_logger:
+            mock_gpa.return_value = {"up_proj_layer_0": torch.rand(1, 5, 256)}
+            visualize_prompt_layer_heatmap(
+                self.model, self.tokenizer, "test", layer_type="gate_proj", show=False
+            )
+            mock_logger.warning.assert_called()
+
+    def test_no_save_parameter(self):
+        """Function does not expose a 'save' parameter."""
+        import inspect
+        sig = inspect.signature(visualize_prompt_layer_heatmap)
+        self.assertNotIn("save", sig.parameters)
+
+    def test_public_import_from_bias(self):
+        """visualize_prompt_layer_heatmap is importable from optipfair.bias."""
+        from optipfair.bias import visualize_prompt_layer_heatmap as vplh
+        self.assertTrue(callable(vplh))
 
 
 class TestBiasMetrics(unittest.TestCase):

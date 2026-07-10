@@ -1265,6 +1265,58 @@ visualize_prompt_heatmap(
 - No `save` parameter — saving is controlled by `output_dir`
 - `reduce_batch`: how to collapse the batch dimension (`"mean"` or `"first"`, default `"mean"`)
 
+### Layer × Neuron Heatmap (single prompt, all layers)
+
+Visualize raw activations for a single prompt across **all transformer layers** for a given
+projection type. Each row is a layer; each column is a neuron bin. Cell value is the mean
+activation across all token positions in the prompt:
+
+```python
+from optipfair.bias import visualize_prompt_layer_heatmap
+
+# Llama-3.2-1B has 16 transformer blocks → rows L0..L15
+visualize_prompt_layer_heatmap(
+    model,
+    tokenizer,
+    "The doctor reviewed the report and concluded that",
+    layer_type="gate_proj",    # "gate_proj", "up_proj", "down_proj_input", etc.
+    bin_size=64,               # neurons per bin (default)
+    cmap="YlOrRd",
+    vmax_percentile=99.0,
+    output_dir="./heatmaps",   # omit to display only
+)
+
+# Compare different projections of the same prompt
+for proj in ["gate_proj", "up_proj", "down_proj_input"]:
+    visualize_prompt_layer_heatmap(
+        model,
+        tokenizer,
+        "The engineer proposed a solution to the problem",
+        layer_type=proj,
+        bin_size=128,
+        show=True,
+    )
+```
+
+**Key points:**
+- Y-axis: transformer layer index (`L0`, `L1`, …, `Ln`)
+- X-axis: neuron index (first index of each bin)
+- Cell value: mean activation magnitude across all token positions (`reduce_seq="mean"`)
+- Valid `layer_type` values: `"gate_proj"`, `"up_proj"`, `"down_proj"`, `"down_proj_input"`,
+  `"mlp_output"`, `"attention"`, `"input_norm"`
+- No `save` parameter — saving is controlled by `output_dir`
+- `reduce_seq`: how to aggregate over token positions (`"mean"` or `"max"`, default `"mean"`)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `layer_type` | — | Projection to analyze (required) |
+| `bin_size` | `64` | Neurons per bin on X-axis |
+| `cmap` | `"YlOrRd"` | Matplotlib colormap |
+| `vmax_percentile` | `99.0` | Percentile for color scale clipping |
+| `reduce_seq` | `"mean"` | Aggregation over token positions |
+| `output_dir` | `None` | Directory to save; `None` = display only |
+| `show` | `True` | Whether to call `plt.show()` |
+
 ```python
 from optipfair.bias import calculate_bias_metrics
 from optipfair.bias.activations import get_activation_pairs

@@ -467,6 +467,181 @@ def visualize_prompt_heatmap(
         plt.show()
 
 
+def visualize_prompt_layer_heatmap(
+    model: Any,
+    tokenizer: Any,
+    prompt: str,
+    layer_type: str,
+    bin_size: int = 64,
+    output_dir: Optional[str] = None,
+    figure_format: str = "png",
+    prompt_index: int = 0,
+    cmap: str = "YlOrRd",
+    vmax_percentile: float = 99.0,
+    reduce_seq: str = "mean",
+    show: bool = True,
+    **params,
+):
+    """
+    Heatmap of raw activations for a single prompt across ALL transformer layers.
+
+    Rows (Y-axis): transformer layer index (L0, L1, ..., Ln).
+    Columns (X-axis): neuron bins (each bin groups bin_size consecutive neurons).
+    Cell value: mean activation magnitude across all token positions in the prompt.
+
+    This view is the layer-wise counterpart of visualize_prompt_heatmap:
+    instead of showing tokens on the Y-axis for one layer, it shows all layers
+    for a given projection type.
+
+    Args:
+        model: A HuggingFace transformer model.
+        tokenizer: Matching tokenizer for the model.
+        prompt: Text prompt to process.
+        layer_type: Projection type to analyze. Valid values: "gate_proj",
+            "up_proj", "down_proj", "down_proj_input", "mlp_output", "attention",
+            "input_norm".
+        bin_size: Number of neurons per bin on the X-axis. Default 64.
+        output_dir: Directory to save the figure. None = do not save.
+        figure_format: File format when saving (png, pdf, svg).
+        prompt_index: Index label used in the saved filename.
+        cmap: Matplotlib colormap. Default "YlOrRd".
+        vmax_percentile: Percentile used to clip the color scale. Default 99.
+        reduce_seq: How to aggregate across token positions: "mean" (default)
+            or "max".
+        show: Whether to call plt.show(). Set to False in non-interactive
+            environments.
+        **params: Unused; accepted for forward-compatibility.
+    """
+    # Capture activations for the requested projection type only
+    activations = get_prompt_activations(
+        model=model,
+        tokenizer=tokenizer,
+        prompt=prompt,
+        target_layers=[layer_type],
+    )
+
+    if not activations:
+        logger.warning(
+            f"No activations captured for layer_type='{layer_type}'. "
+            f"Check that the model has this projection and layer_type is valid."
+        )
+        return
+
+    # Collect layer keys sorted by layer number
+    layer_keys = get_layer_names(activations, layer_type)
+    if not layer_keys:
+        logger.warning(
+            f"No keys matching layer_type='{layer_type}' found in activations. "
+            f"Available keys: {sorted(activations.keys())}"
+        )
+        return
+
+    n_layers = len(layer_keys)
+
+    # Build matrix: shape (n_layers, n_bins)
+    # For each layer: aggregate over token dim -> vector of size H, then bin
+    rows = []
+    effective_bin = bin_size  # may be adjusted on first layer
+
+    for i, key in enumerate(layer_keys):
+        tensor = activations[key].float()  # CPU tensor
+
+        # Collapse batch dim if present (B x S x H -> S x H)
+        if tensor.ndim == 3:
+            tensor = tensor[0]  # take first batch element
+        elif tensor.ndim > 3:
+            while tensor.ndim > 2:
+                tensor = tensor.mean(dim=0)
+
+        # tensor is now S x H; aggregate over sequence dimension
+        if reduce_seq == "mean":
+            vec = tensor.mean(dim=0).numpy()   # shape: (H,)
+        else:
+            vec = tensor.max(dim=0).values.numpy()
+
+        n_neurons = len(vec)
+
+        # Compute effective_bin once using the first layer
+        if i == 0:
+            if n_neurons < bin_size:
+                logger.warning(
+                    f"bin_size={bin_size} exceeds neuron dimension ({n_neurons}). "
+                    f"Using bin_size=1."
+                )
+                effective_bin = 1
+            else:
+                effective_bin = bin_size
+
+        n_bins = n_neurons // effective_bin
+        trimmed = vec[: n_bins * effective_bin]
+        row = trimmed.reshape(n_bins, effective_bin).mean(axis=1)
+        rows.append(row)
+
+    matrix = np.stack(rows)   # shape: (n_layers, n_bins)
+
+    # Color scale
+    local_vmax = float(np.percentile(matrix, vmax_percentile))
+
+    # Plot
+    fig_height = max(4, n_layers * 0.52 + 2.5)
+    fig, ax = plt.subplots(figsize=(14, fig_height))
+    fig.patch.set_facecolor("white")
+
+    im = ax.imshow(
+        matrix,
+        aspect="auto",
+        cmap=cmap,
+        vmin=0,
+        vmax=local_vmax,
+        interpolation="nearest",
+        origin="upper",
+    )
+
+    # Y-axis: layer indices
+    ax.set_yticks(range(n_layers))
+    ax.set_yticklabels([f"L{i}" for i in range(n_layers)], fontsize=9)
+    ax.set_ylabel("Layer", fontsize=11)
+
+    # X-axis: neuron bins, labels show first neuron index of each bin
+    n_bins = matrix.shape[1]
+    n_xticks = min(9, n_bins)
+    xtick_bins = np.linspace(0, n_bins - 1, n_xticks).astype(int)
+    ax.set_xticks(xtick_bins)
+    ax.set_xticklabels(
+        [str(int(b * effective_bin)) for b in xtick_bins],
+        fontsize=8,
+        rotation=30,
+    )
+    ax.set_xlabel("Neuron index", fontsize=11)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label(
+        f"[0 \u2013 {local_vmax:.4f}] (p{int(vmax_percentile)})", fontsize=9
+    )
+    cbar.ax.tick_params(labelsize=8)
+
+    ax.set_title(
+        f"Layer \u00d7 Neuron Heatmap \u2014 {layer_type} | bin={effective_bin}",
+        fontsize=12,
+        fontweight="bold",
+        pad=10,
+    )
+    plt.tight_layout()
+
+    if output_dir:
+        ensure_directory(output_dir)
+        filename = (
+            f"prompt_layer_heatmap_{layer_type}"
+            f"_bin{effective_bin}_prompt{prompt_index}.{figure_format}"
+        )
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath, dpi=300, bbox_inches="tight")
+        print(f"Saved {filepath}")
+
+    if show:
+        plt.show()
+
+
 def visualize_pca(
     model: Any, 
     tokenizer: Any, 

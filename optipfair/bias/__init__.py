@@ -11,6 +11,7 @@ from .visualization import (
     visualize_mean_differences,
     visualize_heatmap,
     visualize_prompt_heatmap,
+    visualize_prompt_layer_heatmap,
     visualize_pca,
 )
 from .metrics import calculate_bias_metrics
@@ -26,6 +27,7 @@ __all__ = [
     "visualize_mean_differences",
     "visualize_heatmap",
     "visualize_prompt_heatmap",
+    "visualize_prompt_layer_heatmap",
     "visualize_pca",
     "calculate_bias_metrics",
     "get_prompt_activations",
