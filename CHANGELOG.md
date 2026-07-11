@@ -1,6 +1,39 @@
 ## [Unreleased]
 
+- No changes yet.
+
+---
+
+## [0.4.2] - 2026-07-10
+
+### ✨ New Features
+
+#### Single-Prompt Activation Analysis
+- **New Function**: `get_prompt_activations()` captures raw activations for a single prompt without requiring pairwise comparison.
+- **API design**: Mirrors the existing prompt-pair activation workflow while returning a single activation dictionary keyed by layer name.
+- **Compatibility**: `get_activation_pairs()` remains unchanged; existing pairwise analysis code continues to work exactly as before.
+
+#### Single-Prompt Activation Heatmaps
+- **New Function**: `visualize_prompt_heatmap()` renders a one-layer heatmap for a single prompt.
+  - **Y-axis**: token positions in the prompt
+  - **X-axis**: neuron dimensions grouped by configurable `bin_size` (default `64`)
+  - **Use case**: inspect raw activation structure for one projection layer without comparing prompts
+- **New Function**: `visualize_prompt_layer_heatmap()` renders a layer-by-layer heatmap for a single prompt.
+  - **Y-axis**: transformer block index (`L0`, `L1`, ...)
+  - **X-axis**: neuron dimensions grouped by configurable `bin_size`
+  - **Aggregation**: each row uses the mean activation across all token positions in the prompt
+  - **Use case**: analyze how one projection family (`gate_proj`, `up_proj`, `down_proj_input`, etc.) evolves across model depth for a single prompt
+- **Ergonomics**: Both heatmap APIs follow the same plotting style as existing bias visualizations and use `output_dir` for optional saving instead of a dedicated `save` parameter.
+- **Validation**: `tests/test_bias_visualization.py` passes with dedicated coverage for both single-prompt heatmap functions.
+
 ### 🔧 Bug Fixes
+
+#### Activation Heatmaps Now Show Negative Values Correctly by Default
+- **Root cause**: `visualize_prompt_heatmap()` and `visualize_prompt_layer_heatmap()` rendered raw activations with `vmin=0` and a sequential colormap. Negative activations were clipped to the floor of the scale, making them effectively invisible in the plots.
+- **Fix**: Both functions now use a diverging colormap (`RdBu_r`) and a zero-centered symmetric normalization based on the absolute activation percentile (`TwoSlopeNorm`). This makes positive and negative activations visible by default while preserving the existing public function signatures.
+- **Behavior change**: Activation heatmaps are now signed by default. Colorbars show symmetric ranges `[-B, +B]` computed from the chosen percentile, so opposite activation polarities are visually distinguishable.
+- **Backward compatibility**: No function signatures changed. Existing calls continue to work, but the visual interpretation is improved because negative activations are no longer hidden.
+- **Validation**: `tests/test_bias_visualization.py` passes after the change (32 tests).
 
 #### `_calculate_cosine_importance` Now Excludes Padding Tokens (closes #38)
 - **Root cause**: The function flattened hidden states to `[batch, seq_len * hidden_dim]` and computed
