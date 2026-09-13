@@ -81,21 +81,24 @@ def compute_distillation_loss(
     valid_mask = shift_labels != -100
     num_valid = valid_mask.sum().clamp(min=1)
 
-    with torch.no_grad():
-        teacher_probs = F.softmax(teacher_logits[..., :-1, :] / temperature, dim=-1)
+    # Skew forward KL -- KL(teacher || mixed), masked.
+    # Teacher detached; student probs keep gradient through `mixed`. Detaching
+    # student_probs here makes the gradient of loss_logits identically zero,
+    # since the mixture is the only path back to the student's parameters.
+    teacher_probs = F.softmax(
+        teacher_logits[..., :-1, :] / temperature, dim=-1
+    ).detach()
+    student_probs = F.softmax(
+        student_logits[..., :-1, :] / temperature, dim=-1
+    )  # NO detach: this is where the gradient enters
 
-    # student_probs must keep its graph: it is the prefactor of the reverse KL,
-    # and detaching it makes the gradient of loss_logits identically zero.
-    student_log_probs = F.log_softmax(student_logits[..., :-1, :] / temperature, dim=-1)
-    student_probs = student_log_probs.exp()
+    mixed_probs = skew_alpha * student_probs + (1.0 - skew_alpha) * teacher_probs
 
-    # The mixture stays detached: it is the target, not the prediction.
-    mixed_probs = (
-        skew_alpha * student_probs.detach() + (1 - skew_alpha) * teacher_probs
-    )
+    eps = 1e-9
+    log_teacher = torch.log(teacher_probs + eps)
+    log_mixed = torch.log(mixed_probs + eps)
 
-    kl_elementwise = student_probs * (student_log_probs - torch.log(mixed_probs + 1e-9))
-    kl_per_token = kl_elementwise.sum(dim=-1)
+    kl_per_token = (teacher_probs * (log_teacher - log_mixed)).sum(dim=-1)
     loss_logits = (kl_per_token * valid_mask).sum() / num_valid
     loss_logits = loss_logits * (temperature ** 2)
 
