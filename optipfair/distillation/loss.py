@@ -82,11 +82,18 @@ def compute_distillation_loss(
     num_valid = valid_mask.sum().clamp(min=1)
 
     with torch.no_grad():
-        student_probs = F.softmax(student_logits[..., :-1, :] / temperature, dim=-1)
         teacher_probs = F.softmax(teacher_logits[..., :-1, :] / temperature, dim=-1)
-        mixed_probs = skew_alpha * student_probs + (1 - skew_alpha) * teacher_probs
 
+    # student_probs must keep its graph: it is the prefactor of the reverse KL,
+    # and detaching it makes the gradient of loss_logits identically zero.
     student_log_probs = F.log_softmax(student_logits[..., :-1, :] / temperature, dim=-1)
+    student_probs = student_log_probs.exp()
+
+    # The mixture stays detached: it is the target, not the prediction.
+    mixed_probs = (
+        skew_alpha * student_probs.detach() + (1 - skew_alpha) * teacher_probs
+    )
+
     kl_elementwise = student_probs * (student_log_probs - torch.log(mixed_probs + 1e-9))
     kl_per_token = kl_elementwise.sum(dim=-1)
     loss_logits = (kl_per_token * valid_mask).sum() / num_valid
