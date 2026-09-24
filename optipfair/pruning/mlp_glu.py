@@ -668,9 +668,9 @@ def prune_model_mlp_glu(
             )
     
     # Validate dataloader compatibility 
-    if dataloader is not None and neuron_selection_method != "MAW":
+    if dataloader is not None and neuron_selection_method not in ("MAW", "PPM"):
         raise ValueError(
-            f"Data-driven pruning with dataloader is only supported for PPM method (parameter 'MAW'). "
+            f"Data-driven pruning with dataloader is only supported for MAW and PPM methods. "
             f"Got neuron_selection_method='{neuron_selection_method}'. "
             f"Please use neuron_selection_method='MAW' or remove the dataloader parameter."
         )    
