@@ -43,6 +43,7 @@ This document outlines the planned features and improvements for OptiPFair.
 
 ### Version 0.5.0
 - **Fairness prunning**: consider bias in pruning. 
+- **Multimodal (VLM) Support**: MLP width pruning and MLP bias analysis for vision-language models with a nested GLU decoder (e.g. Qwen3.5, Qwen3-VL, Gemma 3 multimodal), keeping the model in its published form so it can be saved, reloaded and used with images after pruning. Includes an end-to-end notebook: bias analysis → width pruning → push to the Hugging Face Hub → fresh download → re-test.
 
 ### Version 1.0.0
 - **Distributed Pruning**: Support for pruning very large models across multiple GPUs
