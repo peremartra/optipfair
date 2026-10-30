@@ -120,8 +120,13 @@ def get_text_config(model: PreTrainedModel) -> Any:
         The text decoder configuration, or None if the model has no config.
     """
     config = getattr(model, "config", None)
-    if isinstance(config, PretrainedConfig) and hasattr(config, "get_text_config"):
-        return config.get_text_config()
+    if isinstance(config, PretrainedConfig):
+        if hasattr(config, "get_text_config"):
+            return config.get_text_config()
+        # Older transformers versions without the accessor
+        text_config = getattr(config, "text_config", None)
+        if text_config is not None:
+            return text_config
     return config
 
 

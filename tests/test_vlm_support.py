@@ -9,6 +9,8 @@ keep the nested configuration in sync.
 """
 
 import unittest
+from unittest.mock import MagicMock, patch
+
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -161,6 +163,19 @@ class TestVLMLayerDiscovery(unittest.TestCase):
         model = MockTextModel()
         self.assertIs(get_text_config(model), model.config)
 
+    def test_get_text_config_without_accessor(self):
+        # Older transformers versions have nested text_config but no get_text_config()
+        class LegacyConfig(PretrainedConfig):
+            @property
+            def get_text_config(self):
+                raise AttributeError
+
+        model = MockVLM()
+        text_config = model.config.text_config
+        model.config = LegacyConfig()
+        model.config.text_config = text_config
+        self.assertIs(get_text_config(model), text_config)
+
 
 class TestVLMPruning(unittest.TestCase):
     """Pruning modifies only the text decoder and syncs the nested config."""
@@ -263,6 +278,38 @@ class TestVLMBiasHooks(unittest.TestCase):
 
         # Only text decoder layers are hooked
         self.assertFalse(any("visual" in k for k in activations))
+
+
+class TestBiasPlotsBFloat16(unittest.TestCase):
+    """Bias plots work with bfloat16 activations (models loaded in bfloat16 on GPU)."""
+
+    def setUp(self):
+        try:
+            import matplotlib
+            import sklearn  # noqa: F401
+        except ImportError:
+            self.skipTest("Visualization dependencies not installed")
+        matplotlib.use("Agg")
+
+    def _run(self, plot_fn, layer_key):
+        act1 = {layer_key: torch.randn(1, 5, HIDDEN, dtype=torch.bfloat16)}
+        act2 = {layer_key: torch.randn(1, 5, HIDDEN, dtype=torch.bfloat16)}
+        with patch(
+            "optipfair.bias.visualization.get_activation_pairs", return_value=(act1, act2)
+        ), patch("matplotlib.pyplot.show"):
+            tokenizer = MagicMock()
+            tokenizer.tokenize.return_value = [f"tok{i}" for i in range(5)]
+            plot_fn(None, tokenizer, ("prompt one", "prompt two"), layer_key=layer_key)
+
+    def test_heatmap_bfloat16(self):
+        from optipfair.bias.visualization import visualize_heatmap
+
+        self._run(visualize_heatmap, "mlp_output_layer_0")
+
+    def test_pca_bfloat16(self):
+        from optipfair.bias.visualization import visualize_pca
+
+        self._run(visualize_pca, "mlp_output_layer_0")
 
 
 if __name__ == '__main__':
