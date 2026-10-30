@@ -70,7 +70,8 @@ def prune_model(
         return_stats: Whether to return pruning statistics along with the model
         num_layers_to_remove: Number of layers to remove - for DEPTH only
         layer_indices: Specific layer indices to operate on. For DEPTH pruning: layers to remove.
-            For MLP_GLU pruning: layers to prune (other layers remain unchanged). If None, all layers are affected.
+            For MLP_GLU pruning: must be None or cover every layer, since all MLPs must keep the same
+            intermediate size (selective width pruning raises ValueError). If None, all layers are affected.
         depth_pruning_percentage: Percentage of layers to remove - for DEPTH only
         layer_selection_method: Method for selecting layers ("last", "first", "custom") - for DEPTH only
         

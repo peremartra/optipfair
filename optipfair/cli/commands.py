@@ -35,7 +35,7 @@ def cli():
 @click.option('--num-layers-to-remove', default=None, type=int, 
               help='Number of layers to remove (DEPTH only).')
 @click.option('--layer-indices', default=None, type=str, 
-              help='Comma-separated layer indices. For DEPTH: layers to remove. For MLP_GLU: layers to prune (e.g., "2,5,8").')
+              help='Comma-separated layer indices of layers to remove (DEPTH only, e.g., "2,5,8"). MLP_GLU prunes all layers.')
 @click.option('--layer-selection-method', default='last', type=click.Choice(['last', 'first', 'custom']), 
               help='Method for selecting layers to remove (DEPTH only).')
 @click.option('--output-path', required=True, help='Path to save the pruned model.')
@@ -70,13 +70,13 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
         if layer_selection_method != 'last' and (pruning_percentage is not None or expansion_rate is not None):
             raise click.UsageError("--layer-selection-method is only valid with --pruning-type DEPTH.")
         
-        # Parse layer indices for MLP_GLU if provided
-        parsed_layer_indices = None
+        # Width pruning keeps every MLP at the same size, so it always applies to all layers
         if layer_indices is not None:
-            try:
-                parsed_layer_indices = [int(idx.strip()) for idx in layer_indices.split(',')]
-            except ValueError:
-                raise click.UsageError("--layer-indices must be comma-separated integers (e.g., '2,5,8').")
+            raise click.UsageError(
+                "--layer-indices is only valid with --pruning-type DEPTH. MLP_GLU pruning applies "
+                "to all layers so that every MLP keeps the same intermediate size."
+            )
+        parsed_layer_indices = None
     
     elif pruning_type == 'DEPTH':
         if expansion_divisor is not None:
@@ -158,9 +158,6 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
 
         if expansion_divisor is not None:
             logger.info(f"Applying expansion divisor: {expansion_divisor}")
-        
-        if parsed_layer_indices is not None:
-            logger.info(f"Selective pruning: targeting layers {parsed_layer_indices}")
         
         try:
             pruned_model, stats = prune_model(

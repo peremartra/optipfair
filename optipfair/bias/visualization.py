@@ -286,7 +286,7 @@ def visualize_heatmap(
     diff = torch.abs(activation1 - activation2)
     
     # Convert to numpy for visualization
-    diff_np = diff.numpy()
+    diff_np = diff.float().numpy()
     
     # If the matrix is very large, take a representative subset
     max_dims = (20, 20)
@@ -699,7 +699,7 @@ def visualize_pca(
         activation2 = activation2.view(activation2.shape[0], -1)
     
     # Combine activations for joint PCA
-    combined = torch.cat([activation1, activation2], dim=0).numpy()
+    combined = torch.cat([activation1, activation2], dim=0).float().numpy()
     
     # Apply PCA
     pca = PCA(n_components=2)

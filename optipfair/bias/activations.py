@@ -99,11 +99,16 @@ def register_hooks(model, target_layers: Optional[List[str]] = None) -> List[Any
         return handles
 
     for i, layer in enumerate(layers):
-        # 1. Hook self-attention output
+        # 1. Hook attention output. Hybrid architectures (e.g. Qwen3.5) mix
+        # full attention layers (self_attn) with linear attention layers
+        # (linear_attn, GatedDeltaNet); both are stored under the same key.
         if _should_register("attention", target_layers):
-            if hasattr(layer, "self_attn"):
+            attn = getattr(layer, "self_attn", None)
+            if attn is None:
+                attn = getattr(layer, "linear_attn", None)
+            if attn is not None:
                 handles.append(
-                    layer.self_attn.register_forward_hook(
+                    attn.register_forward_hook(
                         hook_fn(f"attention_output_layer_{i}")
                     )
                 )
@@ -175,7 +180,7 @@ def remove_hooks(handles: List[Any]) -> None:
     """
     for handle in handles:
         handle.remove()
-    logger.info(f"Removed {len(handles)} hooks")
+    logger.debug(f"Removed {len(handles)} hooks")
 
 def process_prompt(
     model: Any,

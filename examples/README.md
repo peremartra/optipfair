@@ -35,6 +35,9 @@
 - [**Data-Driven Width Pruning**](data-driven_width_pruning.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/data-driven_width_pruning.ipynb) [![View in nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.jupyter.org/github/peremartra/optipfair/blob/main/examples/data-driven_width_pruning.ipynb)  
   Hybrid pruning workflow that combines static weights with calibration activations to preserve task-relevant behavior after width pruning.
 
+- [**Multimodal Width Pruning**](multimodal_width_pruning.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peremartra/optipfair/blob/main/examples/multimodal_width_pruning.ipynb) [![View in nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.jupyter.org/github/peremartra/optipfair/blob/main/examples/multimodal_width_pruning.ipynb)  
+  Full lifecycle on a vision-language model (Qwen3.5-4B-Base): MLP bias analysis, width pruning of the text decoder, upload to the Hugging Face Hub, fresh download and verification with text and images.
+
 ### Production Ready
 
 **Complete workflow for real projects**

@@ -122,39 +122,6 @@ pruned_model, stats = opf.prune_model(
     return_stats=True
 )
 
-# Selective Width Pruning (NEW in v0.2.0) - Prune specific MLP layers only
-pruned_model, stats = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",              # Width pruning
-    neuron_selection_method="MAW",
-    pruning_percentage=20,
-    layer_indices=[0, 5, 10, 15, 20],    # Only prune these specific layers
-    show_progress=True,
-    return_stats=True
-)
-
-# Selective width pruning with expansion_rate
-pruned_model, stats = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    expansion_rate=260,                  # Target expansion rate
-    layer_indices=[1, 3, 5, 7],          # Only prune odd-indexed layers
-    show_progress=True,
-    return_stats=True
-)
-
-# Selective data-driven width pruning
-pruned_model, stats = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    neuron_selection_method="MAW",
-    pruning_percentage=25,
-    dataloader=calibration_dataloader,
-    layer_indices=[2, 4, 6, 8],          # Only prune these layers with data-driven method
-    show_progress=True,
-    return_stats=True
-)
-
 # Print pruning statistics
 print(f"Original parameters: {stats['original_parameters']:,}")
 print(f"Pruned parameters: {stats['pruned_parameters']:,}")
@@ -240,23 +207,6 @@ optipfair prune \
   --model-path meta-llama/Llama-3.2-1B \
   --pruning-type DEPTH \
   --layer-indices "2,5,8,11" \
-  --output-path ./pruned-model
-
-# Selective width pruning - prune neurons only in specific layers
-optipfair prune \
-  --model-path meta-llama/Llama-3.2-1B \
-  --pruning-type MLP_GLU \
-  --method MAW \
-  --pruning-percentage 20 \
-  --layer-indices "0,5,10,15,20" \
-  --output-path ./pruned-model
-
-# Selective width pruning with expansion_rate
-optipfair prune \
-  --model-path meta-llama/Llama-3.2-1B \
-  --pruning-type MLP_GLU \
-  --expansion-rate 260 \
-  --layer-indices "1,3,5,7" \
   --output-path ./pruned-model
 ```
 
@@ -529,207 +479,47 @@ OptiPFair supports four methods for calculating neuron importance (used with MLP
 - PPM/MAW is the default and most effective for GLU architectures
 - Data-driven pruning (hybrid mode) is **only compatible** with `neuron_selection_method="MAW"`
 - VOW, PON, and L2 support static (weight-only) pruning only
-- All methods can be combined with `expansion_divisor` and selective layer pruning (`layer_indices`)
+- All methods can be combined with `expansion_divisor`
 
-### Selective Layer Width Pruning (NEW in v0.2.0)
+### Width Pruning Always Applies to All Layers (CHANGED)
 
-The `layer_indices` parameter is now supported for MLP_GLU pruning, allowing you to prune neurons only in specific layers while leaving others unchanged. This provides fine-grained control over which parts of your model to optimize.
+Selective width pruning (`layer_indices` with `pruning_type="MLP_GLU"`, introduced in v0.2.2) is no
+longer supported. Pruning only some layers left MLPs with different intermediate sizes, but the model
+config (or `text_config` in vision-language models) stores a single `intermediate_size` shared by every
+layer. The saved model could not be reloaded with its standard class, and asymmetric architectures are
+not supported by inference engines such as vLLM.
 
-#### Benefits of Selective Width Pruning
-
-1. **Preserve Critical Layers**: Keep important layers (e.g., first and last) at full capacity while pruning middle layers
-2. **Domain Adaptation**: Prune different layers based on layer importance analysis for your specific use case
-3. **Experimental Flexibility**: Test different pruning strategies on specific layer subsets
-4. **Hybrid Approaches**: Combine selective pruning with data-driven methods for optimal results
-
-#### Basic Selective Width Pruning
+Width pruning now always keeps every MLP at the same intermediate size:
 
 ```python
 import optipfair as opf
 
-# Prune only specific layers (others remain unchanged)
+# Prunes every layer to the same intermediate size (default behavior)
+pruned_model = opf.prune_model(model, pruning_type="MLP_GLU", pruning_percentage=20)
+
+# layer_indices is still accepted for MLP_GLU only if it lists every layer (equivalent to None)
+num_layers = len(opf.pruning.utils.get_model_layers(model))
 pruned_model = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    pruning_percentage=30,
-    layer_indices=[5, 10, 15, 20],  # Only these layers will be pruned
-    show_progress=True
+    model, pruning_type="MLP_GLU", pruning_percentage=20, layer_indices=list(range(num_layers))
 )
 
-# Prune all except first and last layers
-num_layers = len(model.model.layers)
-pruned_model = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    pruning_percentage=25,
-    layer_indices=list(range(1, num_layers - 1)),  # Skip layer 0 and last
-    show_progress=True
-)
-```
-
-#### Combining with Other Features
-
-Selective pruning works seamlessly with all MLP_GLU features:
-
-```python
-# With expansion_rate
-pruned_model = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    expansion_rate=260,
-    layer_indices=[2, 4, 6, 8],
-    show_progress=True
-)
-
-# With expansion_divisor for hardware optimization
-pruned_model = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    pruning_percentage=20,
-    expansion_divisor=128,
-    layer_indices=[0, 10, 20],
-    show_progress=True
-)
-
-# With data-driven pruning
-pruned_model = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    neuron_selection_method="MAW",
-    pruning_percentage=25,
-    dataloader=calibration_dataloader,
-    layer_indices=[5, 10, 15],  # Only these layers use calibration data
-    show_progress=True
-)
-
-# All methods (PPM/MAW, VOW, PON) support selective pruning
-pruned_model = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    neuron_selection_method="VOW",  # or "PON"
-    pruning_percentage=20,
-    layer_indices=[1, 3, 5, 7, 9],
-    show_progress=True
-)
-```
-
-#### Selective Pruning with Statistics
-
-When using selective pruning, statistics include information about which layers were pruned:
-
-```python
-pruned_model, stats = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    pruning_percentage=30,
-    layer_indices=[0, 5, 10, 15, 20],
-    return_stats=True,
-    show_progress=True
-)
-
-print(f"Total layers: {stats['total_layers']}")
-print(f"Pruned layers: {stats['pruned_layers']}")
-print(f"Unchanged layers: {stats['total_layers'] - stats['pruned_layers']}")
-print(f"Parameter reduction: {stats['percentage_reduction']:.2f}%")
-```
-
-#### Error Handling and Validation
-
-OptiPFair provides comprehensive validation for `layer_indices`:
-
-```python
-# Valid usage
-pruned_model = opf.prune_model(
-    model=model,
-    pruning_type="MLP_GLU",
-    pruning_percentage=20,
-    layer_indices=[0, 5, 10],  # Valid indices
-    show_progress=True
-)
-
-# Invalid usage examples (will raise errors)
+# A subset of layers raises ValueError before the model is modified
 try:
-    # Empty list
-    opf.prune_model(model, layer_indices=[])
+    opf.prune_model(model, pruning_type="MLP_GLU", pruning_percentage=20, layer_indices=[0, 5, 10])
 except ValueError as e:
-    print(f"Error: {e}")  # "layer_indices cannot be an empty list"
-
-try:
-    # Out of range indices
-    opf.prune_model(model, layer_indices=[0, 999])
-except ValueError as e:
-    print(f"Error: {e}")  # "Invalid layer indices: [999]"
-
-try:
-    # Duplicate indices
-    opf.prune_model(model, layer_indices=[5, 5, 10])
-except ValueError as e:
-    print(f"Error: {e}")  # "layer_indices contains duplicate values"
-
-try:
-    # Non-integer values
-    opf.prune_model(model, layer_indices=[0, "5", 10])
-except TypeError as e:
-    print(f"Error: {e}")  # "All elements in layer_indices must be integers"
+    print(f"Error: {e}")  # "Selective width pruning is not supported: ..."
 ```
 
-#### Backward Compatibility
+Width pruning also raises `ValueError` if the model's MLPs already have different intermediate sizes.
+In the CLI, `--layer-indices` is only valid with `--pruning-type DEPTH`.
 
-`layer_indices=None` (default) maintains backward compatibility by pruning all layers:
-
-```python
-# These are equivalent:
-pruned_model = opf.prune_model(model, pruning_percentage=20)
-pruned_model = opf.prune_model(model, pruning_percentage=20, layer_indices=None)
-```
-
-#### Best Practices for Selective Width Pruning
-
-1. **Preserve First and Last Layers**: These often contain critical information
-   ```python
-   num_layers = len(model.model.layers)
-   middle_layers = list(range(1, num_layers - 1))
-    pruned_model = opf.prune_model(model, pruning_percentage=30, layer_indices=middle_layers)
-   ```
-
-2. **Use Layer Importance Analysis**: Identify less important layers before selective pruning
-   ```python
-    import optipfair as opf
-
-    importance_scores = opf.analyze_layer_importance(model, dataloader)
-   sorted_layers = sorted(importance_scores.items(), key=lambda x: x[1])
-   least_important = [idx for idx, score in sorted_layers[:10]]
-   
-    pruned_model = opf.prune_model(model, pruning_percentage=25, layer_indices=least_important)
-   ```
-
-3. **Combine with Data-Driven Pruning**: Use calibration data for selected layers
-    ```python
-    import optipfair as opf
-
-    pruned_model = opf.prune_model(
-       model=model,
-       neuron_selection_method="MAW",
-       pruning_percentage=20,
-       dataloader=calibration_dataloader,
-       layer_indices=[5, 10, 15, 20],  # Focus calibration on these layers
-       show_progress=True
-   )
-   ```
-
-4. **Test Different Strategies**: Experiment with different layer selections
-   ```python
-   # Strategy 1: Prune early layers
-    early_pruned = opf.prune_model(model, pruning_percentage=20, layer_indices=list(range(0, 10)))
-   
-   # Strategy 2: Prune middle layers
-    middle_pruned = opf.prune_model(model, pruning_percentage=20, layer_indices=list(range(10, 20)))
-   
-   # Strategy 3: Prune alternating layers
-    alternating_pruned = opf.prune_model(model, pruning_percentage=20, layer_indices=list(range(0, 32, 2)))
-   
-   # Evaluate each to find the best strategy for your use case
-   ```
+**Alternatives for layer-specific work:**
+- **Remove whole layers**: use depth pruning with `layer_indices` (`pruning_type="DEPTH"`), which keeps
+  the remaining layers symmetric.
+- **Silence neurons in specific layers**: use `zero_neurons_mlp` (see "Neuron Zeroing" below). It sets
+  weights to zero without changing any dimension, so the model keeps its original architecture.
+- **Fairness scores for some layers only**: `fairness_scores` may cover a subset of layers. Layers without
+  scores are pruned with the standard method, and every layer ends up with the same size.
 
 ### Layer Selection Methods for Depth Pruning
 
@@ -939,6 +729,76 @@ except ValueError as e:
     )
 ```
 
+
+### Multimodal (Vision-Language) Models (NEW)
+
+OptiPFair supports vision-language models whose text decoder uses a GLU MLP, such as Qwen3.5, Qwen3-VL or Gemma 3 multimodal. These models nest the text decoder next to a vision encoder (e.g. `model.language_model.layers` and `model.visual`) and keep the decoder parameters (`intermediate_size`, `num_hidden_layers`, `layer_types`) in a nested `config.text_config`.
+
+What OptiPFair does with a multimodal model:
+- **Width pruning (MLP_GLU)**, including data-driven and fairness-aware pruning, prunes **only the text decoder MLP**. The vision encoder is never modified.
+- **Depth pruning** removes text decoder layers only.
+- **Bias analysis** hooks the text decoder layers only.
+- The nested `text_config` is updated, so the pruned model can be saved and reloaded with its original multimodal class and keeps working with images.
+
+Load the model with its **native multimodal class**. Loading it with `AutoModelForCausalLM` drops the vision encoder, and the saved model is text-only and can no longer be loaded as a multimodal model.
+
+```python
+import torch
+from transformers import AutoModelForImageTextToText, AutoProcessor
+from optipfair import prune_model
+from optipfair.bias import visualize_bias
+
+model_name = "Qwen/Qwen3.5-4B-Base"
+model = AutoModelForImageTextToText.from_pretrained(
+    model_name, dtype=torch.bfloat16, device_map="auto"
+)
+processor = AutoProcessor.from_pretrained(model_name)
+tokenizer = processor.tokenizer  # Bias functions take the text tokenizer
+
+# Bias analysis: same API as for text-only models
+_, metrics = visualize_bias(
+    model, tokenizer,
+    prompt_pairs=[("The man worked as a", "The woman worked as a")],
+    visualization_types=["mean_diff"],
+)
+
+# Width pruning: same API as for text-only models
+model = prune_model(
+    model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="PPM",
+    pruning_percentage=20,
+    expansion_divisor=128,
+)
+
+# Save (or push) the model AND the processor, so the repo stays usable with images
+model.push_to_hub("your-username/model-pruned", private=True)
+processor.push_to_hub("your-username/model-pruned", private=True)
+
+# Reload with the same multimodal class
+model = AutoModelForImageTextToText.from_pretrained("your-username/model-pruned")
+```
+
+Helper functions to inspect where OptiPFair finds the decoder and its configuration:
+
+```python
+from optipfair.pruning.utils import get_layers_path, get_model_layers, get_text_config
+
+get_layers_path(model)       # 'model.language_model.layers' for Qwen3.5 multimodal
+len(get_model_layers(model)) # Number of text decoder layers
+get_text_config(model)       # config.text_config (or config itself for text-only models)
+```
+
+Supported decoder layer paths (tried in this order): `model.layers`, `model.language_model.layers`, `language_model.layers`, `language_model.model.layers`, `model.language_model.model.layers`, `transformer.h`, `encoder.layer`, `layers`.
+
+Notes and limitations:
+- **Hybrid attention**: Qwen3.5 mixes full attention layers (`self_attn`) with linear attention layers (`linear_attn`, GatedDeltaNet). Bias analysis captures both under the same `attention_output_layer_{idx}` key.
+- **Calibration is text-only**: data-driven pruning forwards only `input_ids` and `attention_mask` from the dataloader; image inputs are not used for calibration.
+- **Multi-Token Prediction head**: checkpoints such as Qwen3.5 include an MTP head (`mtp.*`) used by inference engines for speculative decoding. Transformers does not load it, so it is not part of a model saved after pruning.
+- **Memory**: `prune_model(..., return_stats=True)` with MLP_GLU keeps a deep copy of the original model. For large models, compare `model.num_parameters()` before and after pruning instead.
+- **Transformers version**: Qwen3.5 requires a recent transformers release (5.x).
+
+Example notebook: [multimodal_width_pruning.ipynb](examples/multimodal_width_pruning.ipynb) runs the full lifecycle on Qwen3.5-4B-Base: bias analysis, width pruning, upload to the Hugging Face Hub, fresh download and verification with text and images.
 
 ### Model Analysis
 
@@ -1390,7 +1250,8 @@ print(importance_scores)
 The `analyze_layer_importance` function automatically detects transformer layers across different architectures:
 
 - **LLaMA/Qwen/Mistral**: `model.layers`
-- **GPT-2/DistilGPT2**: `transformer.h`  
+- **Vision-language models (Qwen3.5, Qwen3-VL, Gemma 3 multimodal)**: `model.language_model.layers` and related nested paths (the vision encoder is never selected)
+- **GPT-2/DistilGPT2**: `transformer.h`
 - **T5**: `encoder.block` or `decoder.block`
 - **BERT**: `encoder.layer`
 - **Custom architectures**: Manual specification via `layers_path`
@@ -1806,7 +1667,7 @@ pruned_model = prune_model_mlp_glu(
     neuron_selection_method="MAW",
     pruning_percentage=20,  # Remove 20% of neurons
     # Note: Current version performs pruning with static weights
-    # Fairness scores can be used to post-process or guide selective pruning
+    # Fairness scores can be passed with fairness_scores= to guide which neurons are removed
 )
 
 # Option 2: Selective fairness-aware pruning per layer
@@ -1984,15 +1845,16 @@ most_biased_layer = max(layer_bias_means, key=layer_bias_means.get)
 print(f"Most biased layer: {most_biased_layer} (mean bias: {layer_bias_means[most_biased_layer]:.4f})")
 ```
 
-**Pattern 3: Fairness-Aware Selective Pruning**
+**Pattern 3: Fairness Profile for Specific Layers**
 ```python
-# Only prune specific layers based on fairness profile
+# Inspect specific layers based on their fairness profile
 layers_to_prune = ["gate_proj_layer_5", "gate_proj_layer_10", "up_proj_layer_8"]
 selective_pruning_config = {
     layer: fairness_scores.get(layer, None) 
     for layer in layers_to_prune
 }
-# Use config to guide selective pruning on specific layers
+# Use config to decide which neurons to silence with zero_neurons_mlp
+# (width pruning always applies to all layers to keep the architecture symmetric)
 ```
 
 ## Roadmap and Future Extensions
@@ -2035,12 +1897,13 @@ According to the roadmap, OptiPFair has several planned extensions:
 1. **Model Compatibility**: 
    - If you get "Model is not compatible with GLU pruning", ensure your model has a GLU architecture in its MLP layers (like LLaMA, Mistral, etc.)
    - Depth pruning works with any transformer model and doesn't require GLU architecture
+   - For vision-language models (e.g. Qwen3.5), load them with their native class (`AutoModelForImageTextToText`). Loading them with `AutoModelForCausalLM` works for pruning but drops the vision encoder, and the saved model can no longer be used with images
 
 2. **Layer Naming and Selection**: When using bias visualization functions, be aware of:
    - Layer names must match exactly what's in the model's activation dictionary
    - Common layer name patterns are:
      - `mlp_output_layer_{idx}` - Output of MLP block
-     - `attention_output_layer_{idx}` - Output of attention mechanism
+     - `attention_output_layer_{idx}` - Output of attention mechanism (`self_attn`, or `linear_attn` in hybrid architectures such as Qwen3.5)
      - `gate_proj_layer_{idx}` - Output of gate projection in GLU
      - `up_proj_layer_{idx}` - Output of up projection in GLU
          - `down_proj_input_layer_{idx}` - Input to down projection in GLU (expanded MLP space)

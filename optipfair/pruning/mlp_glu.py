@@ -13,7 +13,7 @@ from typing import Tuple, Dict, List, Optional, Callable, Union, Any
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
-from .utils import validate_model_for_glu_pruning, get_model_layers
+from .utils import validate_model_for_glu_pruning, get_model_layers, get_text_config
 import gc
 
 logger = logging.getLogger(__name__)
@@ -589,7 +589,10 @@ def prune_model_mlp_glu(
             neuron_selection_method='MAW' (PPM method), enables hybrid importance calculation using
             both weight magnitudes and activation statistics. Only compatible with PPM/'MAW'.
         layer_indices: Optional list of layer indices to prune. If None, all layers are pruned.
-            When specified, only the listed layers will have their neurons pruned; other layers remain unchanged.
+            Width pruning must keep every MLP at the same intermediate size, because the model
+            config stores a single intermediate_size shared by all layers. A list that does not
+            cover every layer raises ValueError. To silence neurons in specific layers without
+            changing the architecture, use zero_neurons_mlp instead.
         fairness_scores: Optional pre-computed fairness pruning scores for selective layers.
             Keys are layer indices (0, 1, 2, ...). Values are tensors of shape [intermediate_size] on CPU
             (from compute_fairness_pruning_scores). When provided, takes precedence over activation_norms
@@ -608,6 +611,14 @@ def prune_model_mlp_glu(
     layers = get_model_layers(model)
     if not layers:
         raise ValueError("Could not find MLP layers in the model.")
+    
+    # The config stores one intermediate_size for every layer, so all MLPs must share it
+    original_sizes = sorted({layer.mlp.gate_proj.out_features for layer in layers})
+    if len(original_sizes) > 1:
+        raise ValueError(
+            f"MLP layers have different intermediate sizes {original_sizes}. "
+            "Width pruning requires every layer to share the same intermediate_size."
+        )
     
     if layer_indices is not None:
         if not isinstance(layer_indices, list):
@@ -629,7 +640,15 @@ def prune_model_mlp_glu(
         if len(layer_indices) != len(set(layer_indices)):
             raise ValueError("layer_indices contains duplicate values")
         
-        logger.info(f"Selective pruning: will prune {len(layer_indices)} of {len(layers)} layers: {sorted(layer_indices)}")
+        if len(layer_indices) != len(layers):
+            raise ValueError(
+                f"Selective width pruning is not supported: layer_indices covers "
+                f"{len(layer_indices)} of {len(layers)} layers. Pruning only some layers would "
+                "leave MLPs with different intermediate sizes, which the model config cannot "
+                "describe, so the saved model could not be reloaded. Prune all layers "
+                "(layer_indices=None), or use zero_neurons_mlp to silence neurons in specific "
+                "layers without changing the architecture."
+            )
     
     # Validate fairness_scores if provided
     if fairness_scores is not None:
@@ -801,9 +820,10 @@ def prune_model_mlp_glu(
         mlp.up_proj = new_up_proj
         mlp.down_proj = new_down_proj
     
-    # Update model configuration
-    if hasattr(model, "config") and hasattr(model.config, "intermediate_size"):
-        model.config.intermediate_size = new_intermediate_size
+    # Update model configuration (nested text_config for vision-language models)
+    text_config = get_text_config(model)
+    if text_config is not None and hasattr(text_config, "intermediate_size"):
+        text_config.intermediate_size = new_intermediate_size
         logger.info(f"Updated model config: intermediate_size = {new_intermediate_size}")
     
     return model

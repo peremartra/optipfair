@@ -14,7 +14,13 @@ from typing import List, Optional, Union, Tuple, Dict, Any
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
-from .utils import get_model_layers, count_parameters, _prepare_batch_inputs
+from .utils import (
+    get_model_layers,
+    get_layers_path,
+    get_text_config,
+    count_parameters,
+    _prepare_batch_inputs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -184,25 +190,20 @@ def remove_layers_from_model(
         if idx not in indices_to_remove_set:
             new_layers.append(layer)
     
-    # Replace the model's layers using the same logic as get_model_layers
-    if hasattr(model, 'model') and hasattr(model.model, 'layers'):
-        # LLaMA-style models
-        model.model.layers = nn.ModuleList(new_layers)
-    elif hasattr(model, 'transformer') and hasattr(model.transformer, 'h'):
-        # GPT-style models
-        model.transformer.h = nn.ModuleList(new_layers)
-    elif hasattr(model, 'encoder') and hasattr(model.encoder, 'layer'):
-        # BERT-style models
-        model.encoder.layer = nn.ModuleList(new_layers)
-    elif hasattr(model, 'layers'):
-        # Direct layers attribute
-        model.layers = nn.ModuleList(new_layers)
-    else:
+    # Replace the model's layers at the same path get_model_layers reads from
+    layers_path = get_layers_path(model)
+    if layers_path is None:
         raise ValueError("Could not determine model architecture for layer replacement")
-    
-    # Update model configuration
-    if hasattr(model, 'config') and hasattr(model.config, 'num_hidden_layers'):
-        model.config.num_hidden_layers = len(new_layers)
+    *parent_parts, attr_name = layers_path.split(".")
+    parent = model
+    for part in parent_parts:
+        parent = getattr(parent, part)
+    setattr(parent, attr_name, nn.ModuleList(new_layers))
+
+    # Update model configuration (nested text_config for vision-language models)
+    text_config = get_text_config(model)
+    if text_config is not None and hasattr(text_config, 'num_hidden_layers'):
+        text_config.num_hidden_layers = len(new_layers)
         logger.info(f"Updated model config: num_hidden_layers = {len(new_layers)}")
 
     # Reassign layer_idx on all remaining layers.
@@ -227,15 +228,15 @@ def remove_layers_from_model(
     # model raises an IndexError during training/inference. Removing entries from
     # highest to lowest index avoids index-shift corruption.
     if (
-        hasattr(model, 'config')
-        and hasattr(model.config, 'layer_types')
-        and model.config.layer_types is not None
+        text_config is not None
+        and hasattr(text_config, 'layer_types')
+        and text_config.layer_types is not None
     ):
-        synced_layer_types = list(model.config.layer_types)
+        synced_layer_types = list(text_config.layer_types)
         for idx in sorted(layer_indices_to_remove, reverse=True):
             if idx < len(synced_layer_types):
                 synced_layer_types.pop(idx)
-        model.config.layer_types = synced_layer_types
+        text_config.layer_types = synced_layer_types
         logger.info(f"Synced config.layer_types: {len(synced_layer_types)} entries remaining.")
 
     logger.info(f"Removed {len(layer_indices_to_remove)} layers. Model now has {len(new_layers)} layers.")
@@ -262,7 +263,13 @@ def _infer_layers_path(model):
     LAYER_PATH_PATTERNS = [
         # Modern architectures (LLaMA family, Qwen, Mistral, Gemma)
         'model.layers',
-        
+
+        # Vision-language models with a nested text decoder (Qwen3.5, Qwen3-VL, Gemma 3)
+        'model.language_model.layers',
+        'language_model.layers',
+        'language_model.model.layers',
+        'model.language_model.model.layers',
+
         # GPT-2 family (including DistilGPT2)
         'transformer.h',
         'gpt_neox.layers',

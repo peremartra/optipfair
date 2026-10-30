@@ -8,7 +8,7 @@ layer extraction, and other common tasks needed across different pruning methods
 import torch
 from typing import List, Optional, Union, Any, Dict
 import logging
-from transformers import PreTrainedModel
+from transformers import PretrainedConfig, PreTrainedModel
 
 logger = logging.getLogger(__name__)
 
@@ -67,31 +67,88 @@ def validate_model_for_glu_pruning(model: PreTrainedModel) -> bool:
         logger.warning(f"Error validating model for GLU pruning: {str(e)}")
         return False
 
+# Attribute paths to the decoder layer container, tried in order.
+# The language_model paths cover vision-language models (Qwen3.5, Qwen3-VL,
+# Gemma 3 multimodal, ...) whose text decoder is nested next to a vision encoder.
+DECODER_LAYER_PATHS = [
+    "model.layers",                       # LLaMA, Mistral, Qwen, Gemma (text-only)
+    "model.language_model.layers",        # VLM *ForConditionalGeneration (transformers >= 4.52)
+    "language_model.layers",              # VLM base model (e.g. Qwen3_5Model)
+    "language_model.model.layers",        # VLM *ForConditionalGeneration (older transformers)
+    "model.language_model.model.layers",  # VLM with a nested *ForCausalLM language model
+    "transformer.h",                      # GPT-2 and similar
+    "encoder.layer",                      # BERT and similar
+    "layers",                             # Direct layers attribute
+]
+
+
+def get_layers_path(model: PreTrainedModel) -> Optional[str]:
+    """
+    Find the attribute path to the decoder layer container of a model.
+
+    Args:
+        model: Pre-trained model
+
+    Returns:
+        Dotted attribute path (e.g. 'model.layers' or 'model.language_model.layers'),
+        or None if no known layer container is found.
+    """
+    for path in DECODER_LAYER_PATHS:
+        current = model
+        for part in path.split("."):
+            if not hasattr(current, part):
+                break
+            current = getattr(current, part)
+        else:
+            return path
+    return None
+
+
+def get_text_config(model: PreTrainedModel) -> Any:
+    """
+    Return the configuration that describes the text decoder of a model.
+
+    For composite configurations (e.g. vision-language models) the decoder
+    parameters such as intermediate_size, num_hidden_layers or layer_types
+    live in a nested text_config. For text-only models this is the model
+    config itself.
+
+    Args:
+        model: Pre-trained model
+
+    Returns:
+        The text decoder configuration, or None if the model has no config.
+    """
+    config = getattr(model, "config", None)
+    if isinstance(config, PretrainedConfig):
+        if hasattr(config, "get_text_config"):
+            return config.get_text_config()
+        # Older transformers versions without the accessor
+        text_config = getattr(config, "text_config", None)
+        if text_config is not None:
+            return text_config
+    return config
+
+
 def get_model_layers(model: PreTrainedModel) -> List[Any]:
     """
     Extract transformer layers from a pre-trained model.
-    Currently supports LLaMA, Mistral, and similar model architectures.
-    
+    Supports LLaMA, Mistral, Qwen, Gemma and similar architectures, including
+    vision-language models whose text decoder is nested (e.g. Qwen3.5).
+
     Args:
         model: Pre-trained model
-        
+
     Returns:
         List of decoder layers that contain MLP blocks
     """
-    # Try different attribute paths based on common model architectures
-    if hasattr(model, 'model') and hasattr(model.model, 'layers'):
-        # LLaMA, Mistral, and similar architectures
-        return list(model.model.layers)
-    elif hasattr(model, 'transformer') and hasattr(model.transformer, 'h'):
-        # GPT-2 and similar architectures
-        return list(model.transformer.h)
-    elif hasattr(model, 'encoder') and hasattr(model.encoder, 'layer'):
-        # BERT and similar architectures
-        return list(model.encoder.layer)
-    elif hasattr(model, 'layers'):
-        # Direct layers attribute
-        return list(model.layers)
-        
+    path = get_layers_path(model)
+    if path is not None:
+        container = model
+        for part in path.split("."):
+            container = getattr(container, part)
+        return list(container)
+
     logger.warning("Could not find layers in the model")
     return []
 
