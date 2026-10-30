@@ -940,6 +940,76 @@ except ValueError as e:
 ```
 
 
+### Multimodal (Vision-Language) Models (NEW)
+
+OptiPFair supports vision-language models whose text decoder uses a GLU MLP, such as Qwen3.5, Qwen3-VL or Gemma 3 multimodal. These models nest the text decoder next to a vision encoder (e.g. `model.language_model.layers` and `model.visual`) and keep the decoder parameters (`intermediate_size`, `num_hidden_layers`, `layer_types`) in a nested `config.text_config`.
+
+What OptiPFair does with a multimodal model:
+- **Width pruning (MLP_GLU)**, including data-driven and fairness-aware pruning, prunes **only the text decoder MLP**. The vision encoder is never modified.
+- **Depth pruning** removes text decoder layers only.
+- **Bias analysis** hooks the text decoder layers only.
+- The nested `text_config` is updated, so the pruned model can be saved and reloaded with its original multimodal class and keeps working with images.
+
+Load the model with its **native multimodal class**. Loading it with `AutoModelForCausalLM` drops the vision encoder, and the saved model is text-only and can no longer be loaded as a multimodal model.
+
+```python
+import torch
+from transformers import AutoModelForImageTextToText, AutoProcessor
+from optipfair import prune_model
+from optipfair.bias import visualize_bias
+
+model_name = "Qwen/Qwen3.5-4B-Base"
+model = AutoModelForImageTextToText.from_pretrained(
+    model_name, dtype=torch.bfloat16, device_map="auto"
+)
+processor = AutoProcessor.from_pretrained(model_name)
+tokenizer = processor.tokenizer  # Bias functions take the text tokenizer
+
+# Bias analysis: same API as for text-only models
+_, metrics = visualize_bias(
+    model, tokenizer,
+    prompt_pairs=[("The man worked as a", "The woman worked as a")],
+    visualization_types=["mean_diff"],
+)
+
+# Width pruning: same API as for text-only models
+model = prune_model(
+    model,
+    pruning_type="MLP_GLU",
+    neuron_selection_method="PPM",
+    pruning_percentage=20,
+    expansion_divisor=128,
+)
+
+# Save (or push) the model AND the processor, so the repo stays usable with images
+model.push_to_hub("your-username/model-pruned", private=True)
+processor.push_to_hub("your-username/model-pruned", private=True)
+
+# Reload with the same multimodal class
+model = AutoModelForImageTextToText.from_pretrained("your-username/model-pruned")
+```
+
+Helper functions to inspect where OptiPFair finds the decoder and its configuration:
+
+```python
+from optipfair.pruning.utils import get_layers_path, get_model_layers, get_text_config
+
+get_layers_path(model)       # 'model.language_model.layers' for Qwen3.5 multimodal
+len(get_model_layers(model)) # Number of text decoder layers
+get_text_config(model)       # config.text_config (or config itself for text-only models)
+```
+
+Supported decoder layer paths (tried in this order): `model.layers`, `model.language_model.layers`, `language_model.layers`, `language_model.model.layers`, `model.language_model.model.layers`, `transformer.h`, `encoder.layer`, `layers`.
+
+Notes and limitations:
+- **Hybrid attention**: Qwen3.5 mixes full attention layers (`self_attn`) with linear attention layers (`linear_attn`, GatedDeltaNet). Bias analysis captures both under the same `attention_output_layer_{idx}` key.
+- **Calibration is text-only**: data-driven pruning forwards only `input_ids` and `attention_mask` from the dataloader; image inputs are not used for calibration.
+- **Multi-Token Prediction head**: checkpoints such as Qwen3.5 include an MTP head (`mtp.*`) used by inference engines for speculative decoding. Transformers does not load it, so it is not part of a model saved after pruning.
+- **Memory**: `prune_model(..., return_stats=True)` with MLP_GLU keeps a deep copy of the original model. For large models, compare `model.num_parameters()` before and after pruning instead.
+- **Transformers version**: Qwen3.5 requires a recent transformers release (5.x).
+
+Example notebook: [multimodal_width_pruning.ipynb](examples/multimodal_width_pruning.ipynb) runs the full lifecycle on Qwen3.5-4B-Base: bias analysis, width pruning, upload to the Hugging Face Hub, fresh download and verification with text and images.
+
 ### Model Analysis
 
 OptiPFair provides functionality to analyze model architecture:
@@ -1390,7 +1460,8 @@ print(importance_scores)
 The `analyze_layer_importance` function automatically detects transformer layers across different architectures:
 
 - **LLaMA/Qwen/Mistral**: `model.layers`
-- **GPT-2/DistilGPT2**: `transformer.h`  
+- **Vision-language models (Qwen3.5, Qwen3-VL, Gemma 3 multimodal)**: `model.language_model.layers` and related nested paths (the vision encoder is never selected)
+- **GPT-2/DistilGPT2**: `transformer.h`
 - **T5**: `encoder.block` or `decoder.block`
 - **BERT**: `encoder.layer`
 - **Custom architectures**: Manual specification via `layers_path`
@@ -2035,12 +2106,13 @@ According to the roadmap, OptiPFair has several planned extensions:
 1. **Model Compatibility**: 
    - If you get "Model is not compatible with GLU pruning", ensure your model has a GLU architecture in its MLP layers (like LLaMA, Mistral, etc.)
    - Depth pruning works with any transformer model and doesn't require GLU architecture
+   - For vision-language models (e.g. Qwen3.5), load them with their native class (`AutoModelForImageTextToText`). Loading them with `AutoModelForCausalLM` works for pruning but drops the vision encoder, and the saved model can no longer be used with images
 
 2. **Layer Naming and Selection**: When using bias visualization functions, be aware of:
    - Layer names must match exactly what's in the model's activation dictionary
    - Common layer name patterns are:
      - `mlp_output_layer_{idx}` - Output of MLP block
-     - `attention_output_layer_{idx}` - Output of attention mechanism
+     - `attention_output_layer_{idx}` - Output of attention mechanism (`self_attn`, or `linear_attn` in hybrid architectures such as Qwen3.5)
      - `gate_proj_layer_{idx}` - Output of gate projection in GLU
      - `up_proj_layer_{idx}` - Output of up projection in GLU
          - `down_proj_input_layer_{idx}` - Input to down projection in GLU (expanded MLP space)

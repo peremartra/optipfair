@@ -13,7 +13,7 @@ from typing import Tuple, Dict, List, Optional, Callable, Union, Any
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
-from .utils import validate_model_for_glu_pruning, get_model_layers
+from .utils import validate_model_for_glu_pruning, get_model_layers, get_text_config
 import gc
 
 logger = logging.getLogger(__name__)
@@ -801,9 +801,10 @@ def prune_model_mlp_glu(
         mlp.up_proj = new_up_proj
         mlp.down_proj = new_down_proj
     
-    # Update model configuration
-    if hasattr(model, "config") and hasattr(model.config, "intermediate_size"):
-        model.config.intermediate_size = new_intermediate_size
+    # Update model configuration (nested text_config for vision-language models)
+    text_config = get_text_config(model)
+    if text_config is not None and hasattr(text_config, "intermediate_size"):
+        text_config.intermediate_size = new_intermediate_size
         logger.info(f"Updated model config: intermediate_size = {new_intermediate_size}")
     
     return model
