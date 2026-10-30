@@ -1,6 +1,29 @@
 ## [Unreleased]
 
-- No changes yet.
+### ⚠️ Breaking Changes
+
+#### Selective Width Pruning Removed
+- **What changed**: `layer_indices` with `pruning_type="MLP_GLU"` (introduced in v0.2.2) now raises `ValueError` unless it lists every layer. The check runs before the model is modified. In the CLI, `--layer-indices` is only valid with `--pruning-type DEPTH`.
+- **Why**: Pruning only some layers left MLPs with different intermediate sizes, but the config stores a single `intermediate_size` (it was set to the width of the last pruned layer). The saved model could not be reloaded with its standard class, and asymmetric architectures are not supported by inference engines such as vLLM.
+- **Uniform-size check**: Width pruning also raises `ValueError` if the model's MLPs already have different intermediate sizes.
+- **Alternatives**: depth pruning with `layer_indices` to remove whole layers, or `zero_neurons_mlp()` to silence neurons in specific layers without changing the architecture.
+- **Unchanged**: `layer_indices=None` (default) and `layer_indices` for DEPTH pruning. `fairness_scores` may still cover a subset of layers; layers without scores use standard pruning and every layer keeps the same size.
+- **Removed**: `examples/selective_layer_width_pruning.py`.
+
+### ✨ New Features
+
+#### Multimodal (Vision-Language) Model Support
+- **Nested text decoders**: MLP width pruning, depth pruning, layer importance analysis and bias hooks now find decoders nested next to a vision encoder (e.g. `model.language_model.layers` in Qwen3.5, Qwen3-VL, Gemma 3 multimodal). The vision encoder is never modified.
+- **Nested config**: `intermediate_size`, `num_hidden_layers` and `layer_types` are updated in `text_config`, so the pruned model reloads with its native multimodal class (e.g. `AutoModelForImageTextToText`).
+- **Hybrid attention**: bias hooks capture `linear_attn` (GatedDeltaNet) layers as `attention_output_layer_{idx}`.
+- **New helpers**: `get_layers_path()` and `get_text_config()` in `optipfair.pruning.utils`.
+- **New notebook**: `examples/multimodal_width_pruning.ipynb` (bias analysis → width pruning → Hub upload → fresh download → verification).
+- **Limitations**: calibration data for data-driven pruning is text-only; transformers drops Qwen3.5's MTP head on load; Qwen3.5 requires transformers 5.x.
+
+### 🔧 Bug Fixes
+
+- **bfloat16 bias plots**: `visualize_heatmap()` and `visualize_pca()` cast activations to float32 before converting them to NumPy, which failed with `TypeError` on models loaded in bfloat16.
+- **Hook log level**: the "Removed N hooks" message is now logged at DEBUG instead of INFO.
 
 ---
 

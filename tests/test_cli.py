@@ -162,6 +162,20 @@ class TestCLI(unittest.TestCase):
         self.assertIn("only valid with --pruning-type MLP_GLU", result.output)
     
     @patch('optipfair.cli.commands.AutoModelForCausalLM')
+    def test_prune_command_layer_indices_invalid_for_mlp_glu(self, mock_model_class):
+        """Test that --layer-indices is rejected for MLP_GLU before loading the model."""
+        result = self.runner.invoke(prune, [
+            '--model-path', 'test-model',
+            '--pruning-type', 'MLP_GLU',
+            '--layer-indices', '0,2',
+            '--output-path', './test-output'
+        ])
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("only valid with --pruning-type DEPTH", result.output)
+        mock_model_class.from_pretrained.assert_not_called()
+
+    @patch('optipfair.cli.commands.AutoModelForCausalLM')
     def test_analyze_command(self, mock_model_class):
         """Test the analyze command."""
         # Setup mocks

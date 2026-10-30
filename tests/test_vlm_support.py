@@ -199,6 +199,18 @@ class TestVLMPruning(unittest.TestCase):
         out = model(inputs_embeds=torch.randn(1, 3, HIDDEN))
         self.assertEqual(out.shape, (1, 3, HIDDEN))
 
+    def test_selective_mlp_pruning_rejected(self):
+        # A single text_config.intermediate_size cannot describe MLPs of different widths
+        model = MockVLM()
+        with self.assertRaisesRegex(ValueError, "Selective width pruning is not supported"):
+            prune_model(model, pruning_type="MLP_GLU", pruning_percentage=25,
+                        layer_indices=[0], show_progress=False)
+        self.assertEqual(
+            [layer.mlp.gate_proj.out_features for layer in get_model_layers(model)],
+            [INTERMEDIATE] * NUM_LAYERS,
+        )
+        self.assertEqual(model.config.text_config.intermediate_size, INTERMEDIATE)
+
     def test_mlp_glu_pruning_text_model_config(self):
         model = MockTextModel()
         prune_model(model, pruning_type="MLP_GLU", pruning_percentage=50, show_progress=False)

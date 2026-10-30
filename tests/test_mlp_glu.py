@@ -548,30 +548,41 @@ class TestPruneModelFairnessScores(unittest.TestCase):
             self.assertEqual(new_size, expected_size)
     
     def test_fairness_scores_with_selective_layers(self):
-        """Test that fairness_scores works with layer_indices parameter."""
+        """Test that fairness_scores combined with a subset of layer_indices is rejected."""
         from optipfair.pruning.mlp_glu import prune_model_mlp_glu
         
-        # Only prune layers 0 and 2
+        # Pruning only layers 0 and 2 would leave MLPs with different sizes
         layer_indices = [0, 2]
         fairness_scores = self._create_fairness_scores(layer_indices)
         
+        with self.assertRaisesRegex(ValueError, "Selective width pruning is not supported"):
+            prune_model_mlp_glu(
+                self.model,
+                pruning_percentage=20.0,
+                layer_indices=layer_indices,
+                fairness_scores=fairness_scores,
+                show_progress=False
+            )
+        
+        # The model is left untouched
+        for layer in self.model.model.layers:
+            self.assertEqual(layer.mlp.gate_proj.out_features, self.intermediate_size)
+    
+    def test_fairness_scores_partial_layers_keep_uniform_size(self):
+        """Layers without fairness scores use standard pruning and end up with the same size."""
+        from optipfair.pruning.mlp_glu import prune_model_mlp_glu
+        
+        fairness_scores = self._create_fairness_scores([0, 2])
         pruned_model = prune_model_mlp_glu(
             self.model,
             pruning_percentage=20.0,
-            layer_indices=layer_indices,
             fairness_scores=fairness_scores,
             show_progress=False
         )
         
-        # Layers 0 and 2 should be pruned
-        for idx in layer_indices:
-            new_size = pruned_model.model.layers[idx].mlp.gate_proj.out_features
-            self.assertLess(new_size, self.intermediate_size)
-        
-        # Layers 1 and 3 should be unchanged
-        for idx in [1, 3]:
-            size = pruned_model.model.layers[idx].mlp.gate_proj.out_features
-            self.assertEqual(size, self.intermediate_size)
+        sizes = {layer.mlp.gate_proj.out_features for layer in pruned_model.model.layers}
+        self.assertEqual(len(sizes), 1)
+        self.assertLess(sizes.pop(), self.intermediate_size)
     
     def test_fairness_scores_shape_mismatch_raises(self):
         """Test that shape mismatch per layer raises ValueError."""
