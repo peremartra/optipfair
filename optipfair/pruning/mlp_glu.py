@@ -702,7 +702,7 @@ def prune_model_mlp_glu(
     importance_fn = IMPORTANCE_FUNCTIONS[neuron_selection_method]
     
     # Handle mutually exclusive parameters
-    if pruning_percentage is not None and expansion_rate is not None:
+    if pruning_percentage not in (None, 0) and expansion_rate is not None:
         raise ValueError("pruning_percentage and expansion_rate are mutually exclusive. Provide only one.")
     
     if expansion_rate is not None:
