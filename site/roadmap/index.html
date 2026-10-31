@@ -840,10 +840,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#version-050" class="md-nav__link">
+  <a href="#version-050-released-october-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Version 0.5.0
+        Version 0.5.0 (Released - October 2026) ✅
       
     </span>
   </a>
@@ -948,9 +948,11 @@
 <li><strong>Bias API Consistency</strong>: Clarified that <code>analyze_neuron_bias</code> does not accept a <code>batch_size</code> parameter — prompt pairs are processed individually (closes #33)</li>
 <li><strong>New Activation Target <code>down_proj_input</code></strong>: Captures activations in the expanded MLP space (<code>[B, S, intermediate_size]</code>) before the down projection, enabling finer-grained bias analysis (closes #35)</li>
 </ul>
-<h3 id="version-050">Version 0.5.0<a class="headerlink" href="#version-050" title="Permanent link">&para;</a></h3>
+<h3 id="version-050-released-october-2026">Version 0.5.0 (Released - October 2026) ✅<a class="headerlink" href="#version-050-released-october-2026" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Fairness prunning</strong>: consider bias in pruning. </li>
+<li><strong>Multimodal (VLM) Support</strong>: MLP width pruning, depth pruning, layer importance analysis, and bias hooks now support nested text decoders in vision-language models.</li>
+<li><strong>Uniform Width Pruning</strong>: Selective width pruning is rejected because the model configuration cannot represent different intermediate sizes across layers. Use depth pruning or <code>zero_neurons_mlp()</code> for layer-specific changes.</li>
+<li><strong>Visualization Fixes</strong>: Bias plots support bfloat16 activations, and hook cleanup messages are logged at DEBUG level.</li>
 </ul>
 <h3 id="version-100">Version 1.0.0<a class="headerlink" href="#version-100" title="Permanent link">&para;</a></h3>
 <ul>

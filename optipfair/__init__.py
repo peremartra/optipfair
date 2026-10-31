@@ -24,7 +24,7 @@ from .pruning.utils import (
     get_model_layers,
 )
 
-__version__ = "0.4.2"
+__version__ = "0.5.0"
 
 # Configure logging
 logging.basicConfig(
@@ -80,6 +80,9 @@ def prune_model(
     """
     # Apply the requested pruning method
     if pruning_type == "MLP_GLU":
+        if expansion_rate is not None and pruning_percentage == 10:
+            pruning_percentage = 0
+
         # For MLP_GLU, capture original model via deepcopy
         if return_stats:
             from copy import deepcopy

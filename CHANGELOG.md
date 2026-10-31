@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+- No changes yet.
+
+---
+
+## [0.5.0] - 2026-10-31
+
 ### ⚠️ Breaking Changes
 
 #### Selective Width Pruning Removed

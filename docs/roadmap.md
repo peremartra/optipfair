@@ -41,9 +41,10 @@ This document outlines the planned features and improvements for OptiPFair.
 - **Bias API Consistency**: Clarified that `analyze_neuron_bias` does not accept a `batch_size` parameter — prompt pairs are processed individually (closes #33)
 - **New Activation Target `down_proj_input`**: Captures activations in the expanded MLP space (`[B, S, intermediate_size]`) before the down projection, enabling finer-grained bias analysis (closes #35)
 
-### Version 0.5.0
-- **Fairness prunning**: consider bias in pruning. 
-- **Multimodal (VLM) Support**: MLP width pruning and MLP bias analysis for vision-language models with a nested GLU decoder (e.g. Qwen3.5, Qwen3-VL, Gemma 3 multimodal), keeping the model in its published form so it can be saved, reloaded and used with images after pruning. Includes an end-to-end notebook: bias analysis → width pruning → push to the Hugging Face Hub → fresh download → re-test.
+### Version 0.5.0 (Released - October 2026) ✅
+- **Multimodal (VLM) Support**: MLP width pruning, depth pruning, layer importance analysis, and bias hooks now support nested text decoders in vision-language models.
+- **Uniform Width Pruning**: Selective width pruning is rejected because the model configuration cannot represent different intermediate sizes across layers. Use depth pruning or `zero_neurons_mlp()` for layer-specific changes.
+- **Visualization Fixes**: Bias plots support bfloat16 activations, and hook cleanup messages are logged at DEBUG level.
 
 ### Version 1.0.0
 - **Distributed Pruning**: Support for pruning very large models across multiple GPUs
