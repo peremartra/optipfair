@@ -211,6 +211,11 @@ pruned_model = prune_model(
 )
 ```
 
+When calibration batches are padded, provide an `attention_mask`. Padding
+positions are excluded from activation statistics, and squared activations are
+accumulated across batches before taking the L2 norm, so changing batch size
+does not change the calibration scores.
+
 ### Calibration Data Guidelines
 
 #### Dataset Size
@@ -690,6 +695,9 @@ pruned_model = prune_model(
 Starting from OptiPFair v0.2.4, `analyze_layer_importance` automatically handles multiple DataLoader batch formats, making it compatible with both HuggingFace datasets and native PyTorch structures.
 
 The layer-importance score is computed token-by-token with cosine similarity over the hidden dimension. If the batch contains `attention_mask`, padding positions are masked out automatically before averaging.
+Generation caches are disabled during these read-only forward passes when the
+model's `forward` method supports `use_cache`, avoiding unnecessary cache
+allocation.
 
 #### Supported Batch Formats
 

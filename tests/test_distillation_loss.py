@@ -195,6 +195,77 @@ class TestComputeDistillationLoss(unittest.TestCase):
         self.assertAlmostEqual(loss_a["trajectory"], loss_b["trajectory"], places=6)
         self.assertAlmostEqual(loss_a["derivative"], loss_b["derivative"], places=6)
 
+    def test_selected_logits_loss_matches_masked_reference_and_gradients(self):
+        torch.manual_seed(19)
+        student_logits = torch.randn(2, 7, 64, requires_grad=True)
+        teacher_logits = torch.randn(2, 7, 64)
+        labels = torch.tensor(
+            [
+                [-100, -100, 4, 5, 6, -100, -100],
+                [-100, -100, -100, 7, 8, 9, -100],
+            ]
+        )
+        temperature = 1.7
+        skew_alpha = 0.35
+
+        loss, loss_dict = compute_distillation_loss(
+            student_logits,
+            teacher_logits,
+            None,
+            None,
+            labels,
+            alpha=0.0,
+            beta=1.0,
+            temperature=temperature,
+            skew_alpha=skew_alpha,
+        )
+        loss.backward()
+        actual_gradient = student_logits.grad.clone()
+
+        reference_student = student_logits.detach().clone().requires_grad_(True)
+        valid_mask = labels[..., 1:] != -100
+        teacher_probs = torch.softmax(
+            teacher_logits[..., :-1, :] / temperature, dim=-1
+        ).detach()
+        student_probs = torch.softmax(
+            reference_student[..., :-1, :] / temperature, dim=-1
+        )
+        mixed_probs = skew_alpha * student_probs + (1.0 - skew_alpha) * teacher_probs
+        kl_per_token = (
+            teacher_probs
+            * (
+                torch.log(teacher_probs + 1e-9)
+                - torch.log(mixed_probs + 1e-9)
+            )
+        ).sum(dim=-1)
+        reference_loss = (
+            (kl_per_token * valid_mask).sum() / valid_mask.sum()
+        ) * temperature**2
+        reference_loss.backward()
+
+        self.assertAlmostEqual(loss_dict["logits"], reference_loss.item(), places=6)
+        torch.testing.assert_close(actual_gradient, reference_student.grad, rtol=1e-5, atol=1e-7)
+
+    def test_logits_loss_handles_batches_without_valid_tokens(self):
+        student_logits = torch.randn(1, 4, 16, requires_grad=True)
+        teacher_logits = torch.randn(1, 4, 16)
+        labels = torch.full((1, 4), -100)
+
+        loss, loss_dict = compute_distillation_loss(
+            student_logits,
+            teacher_logits,
+            None,
+            None,
+            labels,
+            alpha=0.0,
+            beta=1.0,
+        )
+        loss.backward()
+
+        self.assertTrue(torch.isfinite(loss))
+        self.assertEqual(loss_dict["logits"], 0.0)
+        self.assertTrue(torch.isfinite(student_logits.grad).all())
+
 
 if __name__ == "__main__":
     unittest.main()

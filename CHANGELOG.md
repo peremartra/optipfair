@@ -374,7 +374,7 @@
 - **expansion_divisor Parameter**: New parameter to round intermediate layer sizes to specific multiples (32, 64, 128, 256)
 - **GPU Optimization**: Ensures tensor dimensions are optimized for modern GPU/TPU architectures
 - **Flexible Integration**: Works seamlessly with both `pruning_percentage` and `expansion_rate` parameters
-- **Automatic Rounding**: Intelligently rounds to the nearest multiple after pruning calculation
+- **Automatic Rounding**: Rounds down to the largest multiple after pruning calculation
 
 ### ✨ Enhancements
 
@@ -386,7 +386,7 @@
 ### 🔧 Technical Details
 
 #### New Functions
-- `round_to_divisor()`: Rounds values to nearest multiple of specified divisor
+- `round_to_divisor()`: Rounds values down to a multiple of the specified divisor
 
 #### Modified Functions
 - `prune_model()`: Added `expansion_divisor` parameter with validation

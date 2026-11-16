@@ -20,6 +20,7 @@ from .utils import (
     get_text_config,
     count_parameters,
     _prepare_batch_inputs,
+    _supports_forward_kwarg,
 )
 
 logger = logging.getLogger(__name__)
@@ -605,12 +606,17 @@ def analyze_layer_importance(model, dataloader, layers_path=None, show_progress=
     try:
         # Step 3: Process all batches with progress tracking
         iterator = tqdm(dataloader, desc="Processing batches") if show_progress else dataloader
+        disable_cache = _supports_forward_kwarg(model, "use_cache")
         
         with torch.no_grad():
             for batch_idx, batch in enumerate(iterator):
                 # Normalize batch format (supports dict, tuple/list, or single tensor)
                 inputs = _prepare_batch_inputs(batch, device)
                 
+                # Read-only analysis does not need generation caches.
+                if disable_cache:
+                    inputs["use_cache"] = False
+
                 # Forward pass to trigger hooks
                 model(**inputs)
                 

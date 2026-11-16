@@ -71,35 +71,37 @@ def compute_distillation_loss(
     ):
         layer_map = create_layer_map_uniform(len(student_hiddens), len(teacher_hiddens))
 
-    shift_logits = student_logits[..., :-1, :].contiguous()
     shift_labels = labels[..., 1:].contiguous()
-    loss_task = F.cross_entropy(
-        shift_logits.view(-1, shift_logits.size(-1)),
-        shift_labels.view(-1),
-        ignore_index=-100,
-    )
     valid_mask = shift_labels != -100
     num_valid = valid_mask.sum().clamp(min=1)
+    if valid_mask.any():
+        shift_logits = student_logits[..., :-1, :].contiguous()
+        loss_task = F.cross_entropy(
+            shift_logits.view(-1, shift_logits.size(-1)),
+            shift_labels.view(-1),
+            ignore_index=-100,
+        )
+    else:
+        loss_task = student_logits.sum() * 0.0
 
-    # Skew forward KL -- KL(teacher || mixed), masked.
+    # Select valid positions before softmax to avoid full-sequence vocabulary tensors.
     # Teacher detached; student probs keep gradient through `mixed`. Detaching
     # student_probs here makes the gradient of loss_logits identically zero,
     # since the mixture is the only path back to the student's parameters.
-    teacher_probs = F.softmax(
-        teacher_logits[..., :-1, :] / temperature, dim=-1
-    ).detach()
-    student_probs = F.softmax(
-        student_logits[..., :-1, :] / temperature, dim=-1
-    )  # NO detach: this is where the gradient enters
+    valid_student_logits = student_logits[..., :-1, :][valid_mask]
+    valid_teacher_logits = teacher_logits[..., :-1, :][valid_mask]
+    teacher_log_probs = F.log_softmax(valid_teacher_logits / temperature, dim=-1)
+    student_log_probs = F.log_softmax(valid_student_logits / temperature, dim=-1)
+    teacher_probs = teacher_log_probs.exp().detach()
+    student_probs = student_log_probs.exp()  # NO detach: this is where the gradient enters
 
     mixed_probs = skew_alpha * student_probs + (1.0 - skew_alpha) * teacher_probs
 
     eps = 1e-9
-    log_teacher = torch.log(teacher_probs + eps)
     log_mixed = torch.log(mixed_probs + eps)
 
-    kl_per_token = (teacher_probs * (log_teacher - log_mixed)).sum(dim=-1)
-    loss_logits = (kl_per_token * valid_mask).sum() / num_valid
+    kl_per_token = (teacher_probs * (teacher_log_probs - log_mixed)).sum(dim=-1)
+    loss_logits = kl_per_token.sum() / num_valid
     loss_logits = loss_logits * (temperature ** 2)
 
     if gamma > 0 and student_hiddens is not None and teacher_hiddens is not None:

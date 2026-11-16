@@ -69,6 +69,8 @@ trained_student = opf.distill_model(
     accumulation_steps=4,
     show_progress=True,
     return_stats=False,
+    step_callback=None,
+    callback_every_steps=None,
 )
 ```
 
@@ -84,6 +86,80 @@ trained_student = opf.distill_model(
 - `scheduler`: `"cosine"` or `"none"`.
 - `warmup_ratio`: Warmup fraction in `[0.0, 1.0]`.
 - `accumulation_steps`: Positive integer.
+- `step_callback`: Optional function called after optimizer steps.
+- `callback_every_steps`: Positive interval in optimizer steps; defaults to
+  every step when a callback is provided.
+
+### Labels and step callbacks
+
+Dictionary batches may include `labels`. Positions labeled `-100` are ignored
+by the task, logits, trajectory, and derivative losses, allowing completion-
+only training. Without `labels`, labels are derived from `input_ids` and
+padding is masked using `attention_mask`. Only dictionary batches support
+explicit labels; tuple/TensorDataset batches do not map a field to `labels`.
+`stats["loss_history"]` continues to contain epoch averages.
+
+The optional callback gives access to each optimizer-step result without
+changing the epoch-level history:
+
+```python
+def on_step(info):
+    print(info["global_step"], info["losses"]["total"])
+    info["model"].save_pretrained(f"checkpoint-{info['global_step']}")
+    return False  # Return True to stop training cleanly.
+
+trained_student, stats = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=train_dataloader,
+    step_callback=on_step,
+    callback_every_steps=100,
+    return_stats=True,
+)
+```
+
+The callback receives `model`, `global_step` (starting at 1), `total_steps`,
+zero-based `epoch`, averaged `losses`, and the current `learning_rate`. It runs
+after the optimizer and scheduler steps and after gradients are cleared. It is
+not wrapped in `no_grad`; the student is returned to training mode after it
+returns. Callback exceptions propagate, while the distillation cache settings
+are still restored. With a callback and `return_stats=True`, stats also include
+`stopped_early` and `global_steps_done`. Saving model weights does not save
+optimizer or scheduler state for resuming the same training run.
+When no callback is supplied, the return shape and stats keys remain unchanged.
+
+## Controlling Student Memory Use
+
+`distill_model` trains the student parameters whose `requires_grad` flag is
+`True` when the call starts. Freeze any parameters you do not want to update
+before calling it; the function does not freeze model components automatically.
+For example, to freeze selected components, adapt the parameter-name prefixes
+to the architecture you loaded:
+
+```python
+frozen_prefixes = ("model.visual.", "model.embed_tokens.")
+for name, parameter in student_model.named_parameters():
+    if name.startswith(frozen_prefixes):
+        parameter.requires_grad_(False)
+
+trained_student = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=train_dataloader,
+)
+```
+
+Only parameters with `requires_grad=True` are given to AdamW. A PEFT-wrapped
+student can also be passed when it preserves the model's forward interface.
+The function raises `ValueError` if no student parameters are trainable.
+
+These controls can reduce gradient and optimizer-state memory, but do not
+guarantee that every model fits on a particular GPU. The teacher and student
+still need to fit, and logits loss memory depends on the number of unmasked
+tokens and vocabulary size. The logits loss selects valid positions before
+softmax, which avoids vocabulary-sized intermediate tensors for masked tokens.
+Gradient checkpointing, quantized optimizers, and automatic component freezing
+are not provided by `distill_model`.
 
 ## Validation Rules
 
@@ -96,6 +172,9 @@ trained_student = opf.distill_model(
 - `warmup_ratio` is outside `[0.0, 1.0]`
 - `accumulation_steps <= 0`
 - Batch does not contain `input_ids`
+- The student has no trainable parameters
+- `callback_every_steps` is provided without `step_callback`
+- `callback_every_steps` is not a positive integer
 
 It emits `UserWarning` when `gamma > 0` or `delta > 0` and loss weights do not sum to `1.0`.
 

@@ -8,6 +8,8 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from transformers import PretrainedConfig
+
 from optipfair.distillation.mapping import (
     create_layer_map_uniform,
     create_layer_map_last,
@@ -86,6 +88,20 @@ class TestResolveLayerMap(unittest.TestCase):
         result = resolve_layer_map(self.student, self.teacher, MAPPING_LAST)
         expected = create_layer_map_last(14, 18)
         self.assertEqual(result, expected)
+
+    def test_nested_text_config(self):
+        student = type("MockModel", (), {})()
+        teacher = type("MockModel", (), {})()
+        student.config = PretrainedConfig(
+            text_config=PretrainedConfig(num_hidden_layers=14)
+        )
+        teacher.config = PretrainedConfig(
+            text_config=PretrainedConfig(num_hidden_layers=18)
+        )
+
+        result = resolve_layer_map(student, teacher, MAPPING_UNIFORM)
+
+        self.assertEqual(result, create_layer_map_uniform(14, 18))
 
     def test_invalid_strategy_raises(self):
         with self.assertRaises(ValueError) as ctx:

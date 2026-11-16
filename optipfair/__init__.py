@@ -59,7 +59,7 @@ def prune_model(
         pruning_percentage: Percentage of neurons to prune (0-100) - for MLP_GLU only
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage) - for MLP_GLU only
         expansion_divisor: Optional divisor to round the intermediate layer size (32, 64, 128, 256, or None).
-            When specified, the intermediate size will be rounded to the nearest multiple of this value
+            When specified, the intermediate size will be rounded down to the largest multiple of this value
             after applying pruning_percentage or expansion_rate. Cannot be used alone - requires either
             pruning_percentage or expansion_rate. Only for MLP_GLU pruning.
         dataloader: Optional PyTorch DataLoader for data-driven pruning (MLP_GLU only).
