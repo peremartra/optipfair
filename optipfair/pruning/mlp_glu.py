@@ -13,7 +13,12 @@ from typing import Tuple, Dict, List, Optional, Callable, Union, Any
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
-from .utils import validate_model_for_glu_pruning, get_model_layers, get_text_config
+from .utils import (
+    _supports_forward_kwarg,
+    validate_model_for_glu_pruning,
+    get_model_layers,
+    get_text_config,
+)
 import gc
 
 logger = logging.getLogger(__name__)
@@ -22,7 +27,7 @@ logger = logging.getLogger(__name__)
 # DATA-DRIVEN PRUNING: Activation Capture via Hooks
 # ==============================================================================
 
-# Global variable to accumulate activation norms during calibration
+# Global variable to accumulate squared activation norms during calibration
 _accumulated_act_norms = {}
 
 
@@ -35,10 +40,10 @@ def setup_mlp_hooks_for_importance(
     Register forward hooks on down_proj layers to capture input activations (X_d).
     
     Implements the activation capture mechanism from CFSP paper (Equation 8).
-    Computes L2 norm of each neuron's activations: ||X_d^i|| = sqrt(sum_{b,s} X_d[b,s,i]²)
+    Computes L2 norms over non-padding tokens: ||X_d^i|| = sqrt(sum_{b,s} X_d[b,s,i]²)
     
-    The hooks accumulate norms across multiple batches during calibration, storing
-    results on CPU to minimize VRAM usage.
+    The hooks accumulate squared activations across batches and return L2 norms,
+    storing the accumulated values on CPU to minimize VRAM usage.
     
     Args:
         model: Pre-trained model with transformer layers
@@ -85,28 +90,42 @@ def setup_mlp_hooks_for_importance(
             device='cpu'
         )
     
+    active_attention_mask: Optional[torch.Tensor] = None
+
+    def capture_attention_mask(module, args, kwargs):
+        nonlocal active_attention_mask
+        mask = kwargs.get("attention_mask")
+        active_attention_mask = mask if isinstance(mask, torch.Tensor) else None
+
+    handles.append(
+        model.register_forward_pre_hook(capture_attention_mask, with_kwargs=True)
+    )
+    num_layer_hooks = 0
+
     def make_hook(layer_idx: int):
         """Factory function to create hook with layer index in closure"""
         def hook(module, input, output):
             """
-            Hook function to capture X_d (input to down_proj) and compute L2 norm.
+            Hook function to capture X_d (input to down_proj) and its squared norm.
             
             X_d shape: [batch_size, seq_len, intermediate_size]
-            Output: [intermediate_size] with ||X_d^i|| for each neuron i
+            Output: [intermediate_size] with sum_{b,s} X_d[b,s,i]²
             """
-            X_d = input[0].detach()  # [B, S, I]
-            
-            # Compute L2 norm (CFSP Equation 8):
-            # torch.norm with p=2 and dim=(0,1) computes:
-            # ||X_d^i|| = sqrt(sum_{b,s} X_d[b,s,i]²)
-            act_norms_L2 = torch.norm(
-                X_d.to(torch.float32),  # Ensure precision
-                p=2,
-                dim=(0, 1)  # Sum over batch and sequence dimensions
-            )  # Result: [intermediate_size]
-            
-            # Accumulate on CPU to save VRAM
-            _accumulated_act_norms[layer_idx] += act_norms_L2.cpu()
+            X_d = input[0].detach()
+            if active_attention_mask is not None:
+                if active_attention_mask.shape != X_d.shape[:2]:
+                    raise ValueError(
+                        "attention_mask shape must match the batch and sequence "
+                        f"dimensions of down_proj inputs; got {tuple(active_attention_mask.shape)} "
+                        f"and {tuple(X_d.shape[:2])}."
+                    )
+                valid_tokens = active_attention_mask.to(
+                    device=X_d.device, dtype=torch.bool
+                )
+                X_d = X_d.masked_fill(~valid_tokens.unsqueeze(-1), 0)
+
+            squared_norms = X_d.to(torch.float32).square().sum(dim=(0, 1))
+            _accumulated_act_norms[layer_idx] += squared_norms.cpu()
         
         return hook
     
@@ -114,11 +133,18 @@ def setup_mlp_hooks_for_importance(
     for idx, layer in layers_to_hook:
         handle = layer.mlp.down_proj.register_forward_hook(make_hook(idx))
         handles.append(handle)
-    
+        num_layer_hooks += 1
+
     if layer_indices is not None:
-        logger.info(f"Registered {len(handles)} hooks on down_proj layers {layer_indices} for activation capture")
+        logger.info(
+            f"Registered {num_layer_hooks} hooks on down_proj layers "
+            f"{layer_indices} for activation capture"
+        )
     else:
-        logger.info(f"Registered {len(handles)} hooks on all down_proj layers for activation capture")
+        logger.info(
+            f"Registered {num_layer_hooks} hooks on all down_proj layers "
+            "for activation capture"
+        )
     
     return handles
 
@@ -138,7 +164,7 @@ def get_activation_norms() -> Dict[int, torch.Tensor]:
         >>> print(activation_norms[0].shape)  # torch.Size([8192]) for standard LLaMA
     """
     return {
-        layer_idx: norms.clone()  # Clone to prevent external modifications
+        layer_idx: norms.sqrt().clone()
         for layer_idx, norms in _accumulated_act_norms.items()
     }
 
@@ -169,6 +195,7 @@ def run_calibration_forward_passes(
     model.eval()
     
     iterator = tqdm(dataloader, desc="Calibration") if show_progress else dataloader
+    disable_cache = _supports_forward_kwarg(model, "use_cache")
     
     with torch.no_grad():
         for batch_idx, batch in enumerate(iterator):
@@ -192,6 +219,10 @@ def run_calibration_forward_passes(
                     f"Expected dict or tuple of tensors."
                 )
             
+            # Analysis does not need generation caches.
+            if disable_cache:
+                inputs["use_cache"] = False
+
             # Forward pass (hooks are triggered automatically)
             _ = model(**inputs)
             
@@ -374,7 +405,7 @@ IMPORTANCE_FUNCTIONS = {
 
 def round_to_divisor(value: int, divisor: int) -> int:
     """
-    Round value down to the nearest multiple of divisor.
+    Round value down to the largest multiple of divisor not greater than value.
     
     Args:
         value: Value to round
@@ -414,7 +445,7 @@ def prune_neuron_pairs(
         activation_norms: Optional activation norms from calibration [intermediate_size].
             When provided, uses hybrid importance calculation.
         layer_idx: Layer index (used for logging when activation_norms provided)
-        expansion_divisor: Optional divisor to round the intermediate size to nearest multiple
+        expansion_divisor: Optional divisor to round the intermediate size down to a multiple
         custom_importance_scores: Optional pre-computed importance scores of shape [intermediate_size]
             on CPU. If provided, overrides importance_fn and activation_norms. Used for fairness-aware
             pruning. Scores should be normalized to [0, 1] range. Internally inverted before pruning
@@ -583,7 +614,7 @@ def prune_model_mlp_glu(
         pruning_percentage: Percentage of neurons to prune (0-100)
         expansion_rate: Target expansion rate in percentage (mutually exclusive with pruning_percentage)
         expansion_divisor: Optional divisor (32, 64, 128, 256, or None) to round intermediate layer size.
-            When specified, the intermediate size will be rounded to the nearest multiple after applying
+            When specified, the intermediate size will be rounded down to the largest multiple after applying
             pruning. Cannot be used alone - requires either pruning_percentage or expansion_rate.
         dataloader: Optional DataLoader for data-driven pruning. When provided with
             neuron_selection_method='MAW' (PPM method), enables hybrid importance calculation using

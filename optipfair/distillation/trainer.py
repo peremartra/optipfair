@@ -10,8 +10,10 @@ from __future__ import annotations
 import math
 import time
 import warnings
+from contextlib import contextmanager
+from functools import wraps
 from statistics import mean
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 import torch
 from torch.optim import AdamW
@@ -20,11 +22,55 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import PreTrainedModel
 
-from ..pruning.utils import _prepare_batch_inputs
+from ..pruning.utils import _prepare_batch_inputs, get_text_config
 from .loss import compute_distillation_loss
 from .mapping import MAPPING_LAST, MAPPING_UNIFORM, resolve_layer_map
 
 
+@contextmanager
+def _temporarily_disable_use_cache(
+    student_model: PreTrainedModel, teacher_model: PreTrainedModel
+) -> Iterator[None]:
+    configurations: List[Tuple[Any, bool, Any]] = []
+    seen_config_ids: Set[int] = set()
+
+    try:
+        for model in (student_model, teacher_model):
+            for config in (getattr(model, "config", None), get_text_config(model)):
+                if config is None or id(config) in seen_config_ids:
+                    continue
+                seen_config_ids.add(id(config))
+                has_use_cache = hasattr(config, "use_cache")
+                original_value = getattr(config, "use_cache", None)
+                configurations.append((config, has_use_cache, original_value))
+                config.use_cache = False
+
+        yield
+    finally:
+        for config, has_use_cache, original_value in reversed(configurations):
+            if has_use_cache:
+                config.use_cache = original_value
+            elif hasattr(config, "use_cache"):
+                delattr(config, "use_cache")
+
+
+def _disable_use_cache_during_distillation(
+    function: Callable[..., Any],
+) -> Callable[..., Any]:
+    @wraps(function)
+    def wrapped(
+        student_model: PreTrainedModel,
+        teacher_model: PreTrainedModel,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        with _temporarily_disable_use_cache(student_model, teacher_model):
+            return function(student_model, teacher_model, *args, **kwargs)
+
+    return wrapped
+
+
+@_disable_use_cache_during_distillation
 def distill_model(
     student_model: PreTrainedModel,
     teacher_model: PreTrainedModel,
@@ -43,14 +89,21 @@ def distill_model(
     accumulation_steps: int = 4,
     show_progress: bool = True,
     return_stats: bool = False,
+    step_callback: Optional[Callable[[Dict[str, Any]], Optional[bool]]] = None,
+    callback_every_steps: Optional[int] = None,
 ) -> Union[PreTrainedModel, Tuple[PreTrainedModel, Dict]]:
     """
     Distill a student model from a teacher model using compound losses.
 
     Args:
         student_model: Student model to train.
+            Set `requires_grad=False` on parameters to freeze them before
+            calling; only trainable parameters are passed to AdamW.
         teacher_model: Teacher model used as distillation target.
-        dataloader: Training dataloader yielding token batches.
+        dataloader: Training dataloader yielding token batches. Dict batches
+            may include `labels`; positions set to -100 are ignored by all
+            loss components. Without `labels`, targets come from `input_ids`
+            and are masked by `attention_mask` when present.
         layer_mapping_strategy: Layer mapping strategy ("uniform" or "last").
         alpha: Hard labels weight.
         beta: Soft labels weight.
@@ -65,6 +118,10 @@ def distill_model(
         accumulation_steps: Gradient accumulation steps.
         show_progress: Whether to show tqdm progress bars.
         return_stats: Whether to return stats with the trained model.
+        step_callback: Optional callback after optimizer steps. Return True to
+            stop training cleanly.
+        callback_every_steps: Callback interval in optimizer steps. Defaults
+            to every step when a callback is provided.
 
     Returns:
         Trained student model, or (trained_model, stats_dict) when
@@ -73,7 +130,8 @@ def distill_model(
     Raises:
         ValueError: If loss weights are all zero, models are the same object,
             accumulation_steps is invalid, inputs are malformed, or mapping
-            strategy is unsupported.
+            strategy is unsupported, callback arguments are invalid, or the
+            student has no trainable parameters.
     """
     total_weight = alpha + beta + gamma + delta
     if math.isclose(total_weight, 0.0):
@@ -94,6 +152,21 @@ def distill_model(
     if accumulation_steps <= 0:
         raise ValueError("accumulation_steps must be a positive integer.")
 
+    if step_callback is not None and not callable(step_callback):
+        raise ValueError("step_callback must be callable.")
+    if callback_every_steps is not None:
+        if step_callback is None:
+            raise ValueError(
+                "callback_every_steps requires step_callback to be provided."
+            )
+        if (
+            not isinstance(callback_every_steps, int)
+            or isinstance(callback_every_steps, bool)
+            or callback_every_steps < 1
+        ):
+            raise ValueError("callback_every_steps must be a positive integer.")
+    callback_interval = callback_every_steps or 1
+
     if (gamma > 0 or delta > 0) and not math.isclose(total_weight, 1.0):
         warnings.warn(
             "Loss weights do not sum to 1.0. This is valid but may affect training scale.",
@@ -106,17 +179,6 @@ def distill_model(
     if teacher_device != device:
         teacher_model.to(device)
 
-    # Disable KV-cache for both models during distillation.
-    # Hybrid architectures (e.g. Qwen3.5 GatedDeltaNet) allocate cache buffers
-    # based on config.layer_types at forward time. After depth pruning the buffer
-    # dimensions no longer match the reduced layer count, causing an IndexError.
-    # Training never needs the cache, so disabling it is always correct here.
-    # We restore the original values on exit so the caller's config is unchanged.
-    _student_use_cache = getattr(student_model.config, 'use_cache', None)
-    _teacher_use_cache = getattr(teacher_model.config, 'use_cache', None)
-    student_model.config.use_cache = False
-    teacher_model.config.use_cache = False
-
     student_model.train()
     teacher_model.eval()
 
@@ -128,15 +190,24 @@ def distill_model(
         layer_map_used = resolve_layer_map(student_model, teacher_model, layer_mapping_strategy)
         layer_mapping_strategy_used = layer_mapping_strategy
 
-    optimizer = AdamW(student_model.parameters(), lr=learning_rate)
+    trainable_parameters = [
+        parameter for parameter in student_model.parameters() if parameter.requires_grad
+    ]
+    if not trainable_parameters:
+        raise ValueError("student_model must have at least one trainable parameter.")
+    optimizer = AdamW(trainable_parameters, lr=learning_rate)
     optimizer.zero_grad()
 
-    total_steps = len(dataloader) // accumulation_steps * epochs
-    warmup_steps = int(total_steps * warmup_ratio)
-    cosine_steps = total_steps - warmup_steps
+    steps_per_epoch = (
+        len(dataloader) + accumulation_steps - 1
+    ) // accumulation_steps
+    total_steps = steps_per_epoch * epochs
+    scheduler_total_steps = len(dataloader) // accumulation_steps * epochs
+    warmup_steps = int(scheduler_total_steps * warmup_ratio)
+    cosine_steps = scheduler_total_steps - warmup_steps
 
     scheduler_instance = None
-    if scheduler == "cosine" and total_steps > 0:
+    if scheduler == "cosine" and scheduler_total_steps > 0:
         if warmup_steps <= 0:
             scheduler_instance = CosineAnnealingLR(
                 optimizer,
@@ -177,6 +248,47 @@ def distill_model(
     }
     epoch_times: List[float] = []
     total_start_time = time.time()
+    global_step = 0
+    stopped_early = False
+
+    def finish_optimizer_step(
+        epoch: int,
+        accumulated_losses: Dict[str, float],
+        accumulation_counter: int,
+        epoch_losses: Dict[str, List[float]],
+    ) -> Tuple[Dict[str, float], bool]:
+        nonlocal global_step
+
+        torch.nn.utils.clip_grad_norm_(student_model.parameters(), max_norm=1.0)
+        optimizer.step()
+        if scheduler_instance is not None:
+            scheduler_instance.step()
+        optimizer.zero_grad()
+
+        avg_losses = {
+            key: value / accumulation_counter
+            for key, value in accumulated_losses.items()
+        }
+        for key, value in avg_losses.items():
+            epoch_losses[key].append(value)
+
+        global_step += 1
+        callback_requested_stop = False
+        if step_callback is not None and global_step % callback_interval == 0:
+            callback_info = {
+                "model": student_model,
+                "global_step": global_step,
+                "total_steps": total_steps,
+                "epoch": epoch,
+                "losses": avg_losses,
+                "learning_rate": optimizer.param_groups[0]["lr"],
+            }
+            try:
+                callback_requested_stop = step_callback(callback_info) is True
+            finally:
+                student_model.train()
+
+        return avg_losses, callback_requested_stop
 
     for epoch in range(epochs):
         epoch_start_time = time.time()
@@ -243,18 +355,9 @@ def distill_model(
             accumulation_counter += 1
 
             if (batch_idx + 1) % accumulation_steps == 0:
-                torch.nn.utils.clip_grad_norm_(student_model.parameters(), max_norm=1.0)
-                optimizer.step()
-                if scheduler_instance is not None:
-                    scheduler_instance.step()
-                optimizer.zero_grad()
-
-                avg_losses = {
-                    key: value / accumulation_counter
-                    for key, value in accumulated_losses.items()
-                }
-                for key, value in avg_losses.items():
-                    epoch_losses[key].append(value)
+                avg_losses, callback_requested_stop = finish_optimizer_step(
+                    epoch, accumulated_losses, accumulation_counter, epoch_losses
+                )
 
                 postfix = {
                     "loss": f"{avg_losses['total']:.4f}",
@@ -269,20 +372,16 @@ def distill_model(
 
                 accumulated_losses = {key: 0.0 for key in loss_history}
                 accumulation_counter = 0
+                if callback_requested_stop:
+                    stopped_early = True
+                    break
 
         if accumulation_counter > 0:
-            torch.nn.utils.clip_grad_norm_(student_model.parameters(), max_norm=1.0)
-            optimizer.step()
-            if scheduler_instance is not None:
-                scheduler_instance.step()
-            optimizer.zero_grad()
-
-            avg_losses = {
-                key: value / accumulation_counter
-                for key, value in accumulated_losses.items()
-            }
-            for key, value in avg_losses.items():
-                epoch_losses[key].append(value)
+            avg_losses, callback_requested_stop = finish_optimizer_step(
+                epoch, accumulated_losses, accumulation_counter, epoch_losses
+            )
+            if callback_requested_stop:
+                stopped_early = True
 
         for key, values in epoch_losses.items():
             if values:
@@ -291,15 +390,10 @@ def distill_model(
                 loss_history[key].append(0.0)
 
         epoch_times.append(time.time() - epoch_start_time)
+        if stopped_early:
+            break
 
     total_time = time.time() - total_start_time
-
-    # Restore use_cache to its original value so the caller's model config
-    # is not permanently modified by distill_model().
-    if _student_use_cache is not None:
-        student_model.config.use_cache = _student_use_cache
-    if _teacher_use_cache is not None:
-        teacher_model.config.use_cache = _teacher_use_cache
 
     if not return_stats:
         return student_model
@@ -329,5 +423,8 @@ def distill_model(
         "total_time_seconds": total_time,
         "avg_time_per_epoch": (mean(epoch_times) if epoch_times else 0.0),
     }
+    if step_callback is not None:
+        stats["stopped_early"] = stopped_early
+        stats["global_steps_done"] = global_step
 
     return student_model, stats

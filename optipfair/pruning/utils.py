@@ -5,12 +5,33 @@ This module provides helper functions for model compatibility checking,
 layer extraction, and other common tasks needed across different pruning methods.
 """
 
+import inspect
+import logging
 import torch
 from typing import List, Optional, Union, Any, Dict
-import logging
 from transformers import PretrainedConfig, PreTrainedModel
 
 logger = logging.getLogger(__name__)
+
+
+def _supports_forward_kwarg(model: torch.nn.Module, name: str) -> bool:
+    """Return whether a model's forward method accepts a keyword argument."""
+    try:
+        parameters = inspect.signature(model.forward).parameters.values()
+    except (TypeError, ValueError) as exc:
+        logger.warning(
+            "Could not inspect %s.forward; omitting %s=False during analysis: %s",
+            type(model).__name__,
+            name,
+            exc,
+        )
+        return False
+
+    return any(
+        parameter.name == name or parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters
+    )
+
 
 def validate_model_for_glu_pruning(model: PreTrainedModel) -> bool:
     """

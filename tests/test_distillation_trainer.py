@@ -10,11 +10,13 @@ from unittest.mock import patch
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
+from transformers import PretrainedConfig
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from optipfair.distillation.mapping import MAPPING_LAST, MAPPING_UNIFORM
 from optipfair.distillation.trainer import distill_model
+from optipfair.pruning.utils import get_text_config
 
 
 class MockConfig:
@@ -32,16 +34,37 @@ class MockModelOutput:
 class MockSmallModel(nn.Module):
     """Minimal mock model that returns logits and optional hidden states."""
 
-    def __init__(self, num_layers=4, hidden_size=32, vocab_size=100):
+    def __init__(
+        self, num_layers=4, hidden_size=32, vocab_size=100, nested_config=False
+    ):
         super().__init__()
-        self.config = MockConfig(num_layers, hidden_size)
+        if nested_config:
+            text_config = PretrainedConfig(
+                num_hidden_layers=num_layers,
+                hidden_size=hidden_size,
+            )
+            text_config.use_cache = True
+            self.config = PretrainedConfig(text_config=text_config)
+            self.config.text_config = text_config
+        else:
+            self.config = MockConfig(num_layers, hidden_size)
         self.embedding = nn.Embedding(vocab_size, hidden_size)
         self.layers = nn.ModuleList(
             [nn.Linear(hidden_size, hidden_size) for _ in range(num_layers)]
         )
         self.lm_head = nn.Linear(hidden_size, vocab_size)
+        self.cache_values = []
+        self.forward_modes = []
 
     def forward(self, input_ids, attention_mask=None, output_hidden_states=False):
+        self.forward_modes.append(self.training)
+        text_config = get_text_config(self)
+        self.cache_values.append(
+            (
+                getattr(self.config, "use_cache", "<missing>"),
+                getattr(text_config, "use_cache", "<missing>"),
+            )
+        )
         x = self.embedding(input_ids)
         hidden_states = []
 
@@ -312,6 +335,281 @@ class TestDistillModelReturnValues(unittest.TestCase):
         self.assertEqual(stats["epochs"], 1)
 
 
+class TestDistillModelCacheHandling(unittest.TestCase):
+    def test_existing_flat_cache_values_are_restored(self):
+        student = MockSmallModel(num_layers=4)
+        teacher = MockSmallModel(num_layers=6)
+        student.config.use_cache = True
+        teacher.config.use_cache = False
+
+        distill_model(
+            student,
+            teacher,
+            make_tuple_dataloader(),
+            epochs=1,
+            accumulation_steps=1,
+            show_progress=False,
+        )
+
+        self.assertTrue(
+            all(root is False and text is False for root, text in student.cache_values)
+        )
+        self.assertTrue(
+            all(root is False and text is False for root, text in teacher.cache_values)
+        )
+        self.assertIs(student.config.use_cache, True)
+        self.assertIs(teacher.config.use_cache, False)
+
+    def test_optimizer_uses_only_trainable_parameters(self):
+        student = MockSmallModel(num_layers=4)
+        teacher = MockSmallModel(num_layers=6)
+        frozen_parameter = student.layers[0].weight
+        frozen_parameter.requires_grad_(False)
+        frozen_before = frozen_parameter.detach().clone()
+        trainable_parameters = [
+            parameter for parameter in student.parameters() if parameter.requires_grad
+        ]
+        optimizer_class = torch.optim.AdamW
+
+        with patch(
+            "optipfair.distillation.trainer.AdamW",
+            wraps=optimizer_class,
+        ) as mocked_optimizer:
+            distill_model(
+                student,
+                teacher,
+                make_tuple_dataloader(),
+                epochs=1,
+                accumulation_steps=1,
+                show_progress=False,
+            )
+
+        optimizer_parameters = mocked_optimizer.call_args.args[0]
+        self.assertEqual(optimizer_parameters, trainable_parameters)
+        torch.testing.assert_close(frozen_parameter, frozen_before)
+
+    def test_requires_at_least_one_trainable_student_parameter(self):
+        student = MockSmallModel(num_layers=4)
+        teacher = MockSmallModel(num_layers=6)
+        for parameter in student.parameters():
+            parameter.requires_grad_(False)
+
+        with self.assertRaisesRegex(ValueError, "at least one trainable parameter"):
+            distill_model(
+                student,
+                teacher,
+                make_tuple_dataloader(),
+                epochs=1,
+                accumulation_steps=1,
+                show_progress=False,
+            )
+
+    def test_nested_cache_is_disabled_and_restored(self):
+        student = MockSmallModel(num_layers=4, nested_config=True)
+        teacher = MockSmallModel(num_layers=6, nested_config=True)
+        dataloader = make_tuple_dataloader()
+        student_text_config = get_text_config(student)
+        teacher_text_config = get_text_config(teacher)
+
+        distill_model(
+            student,
+            teacher,
+            dataloader,
+            epochs=1,
+            accumulation_steps=1,
+            show_progress=False,
+        )
+
+        self.assertTrue(student.cache_values)
+        self.assertTrue(teacher.cache_values)
+        self.assertTrue(
+            all(root is False and text is False for root, text in student.cache_values)
+        )
+        self.assertTrue(
+            all(root is False and text is False for root, text in teacher.cache_values)
+        )
+        self.assertFalse(hasattr(student.config, "use_cache"))
+        self.assertFalse(hasattr(teacher.config, "use_cache"))
+        self.assertIs(student_text_config.use_cache, True)
+        self.assertIs(teacher_text_config.use_cache, True)
+
+    def test_cache_is_restored_when_training_raises(self):
+        student = MockSmallModel(num_layers=4, nested_config=True)
+        teacher = MockSmallModel(num_layers=6, nested_config=True)
+        student_text_config = get_text_config(student)
+        teacher_text_config = get_text_config(teacher)
+
+        with patch(
+            "optipfair.distillation.trainer.compute_distillation_loss",
+            side_effect=RuntimeError("loss failed"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "loss failed"):
+                distill_model(
+                    student,
+                    teacher,
+                    make_tuple_dataloader(),
+                    epochs=1,
+                    accumulation_steps=1,
+                    show_progress=False,
+                )
+
+        self.assertFalse(hasattr(student.config, "use_cache"))
+        self.assertFalse(hasattr(teacher.config, "use_cache"))
+        self.assertIs(student_text_config.use_cache, True)
+        self.assertIs(teacher_text_config.use_cache, True)
+
+
+class TestDistillModelStepCallback(unittest.TestCase):
+    def setUp(self):
+        self.student = MockSmallModel(num_layers=4)
+        self.teacher = MockSmallModel(num_layers=6)
+        self.dataloader = make_tuple_dataloader(num_batches=3)
+
+    def test_callback_interval_and_step_payload(self):
+        calls = []
+
+        def callback(info):
+            calls.append(info)
+            self.assertIs(info["model"], self.student)
+            self.assertEqual(
+                set(info["losses"]),
+                {"total", "task", "logits", "trajectory", "derivative"},
+            )
+            self.assertIsInstance(info["learning_rate"], float)
+            self.assertTrue(all(parameter.grad is None for parameter in self.student.parameters()))
+
+        _, stats = distill_model(
+            self.student,
+            self.teacher,
+            self.dataloader,
+            epochs=2,
+            accumulation_steps=2,
+            callback_every_steps=2,
+            step_callback=callback,
+            show_progress=False,
+            return_stats=True,
+        )
+
+        self.assertEqual([call["global_step"] for call in calls], [2, 4])
+        self.assertEqual([call["total_steps"] for call in calls], [4, 4])
+        self.assertEqual([call["epoch"] for call in calls], [0, 1])
+        self.assertFalse(stats["stopped_early"])
+        self.assertEqual(stats["global_steps_done"], 4)
+
+    def test_callback_defaults_to_every_step_and_restores_train_mode(self):
+        calls = []
+
+        def callback(info):
+            calls.append(info["global_step"])
+            info["model"].eval()
+
+        _, stats = distill_model(
+            self.student,
+            self.teacher,
+            self.dataloader,
+            epochs=1,
+            accumulation_steps=1,
+            step_callback=callback,
+            show_progress=False,
+            return_stats=True,
+        )
+
+        self.assertEqual(calls, [1, 2, 3])
+        self.assertTrue(all(self.student.forward_modes))
+        self.assertTrue(self.student.training)
+        self.assertEqual(stats["global_steps_done"], 3)
+
+    def test_callback_stops_after_requested_step(self):
+        calls = []
+
+        def callback(info):
+            calls.append(info["global_step"])
+            return info["global_step"] == 2
+
+        _, stats = distill_model(
+            self.student,
+            self.teacher,
+            self.dataloader,
+            epochs=3,
+            accumulation_steps=1,
+            step_callback=callback,
+            show_progress=False,
+            return_stats=True,
+        )
+
+        self.assertEqual(calls, [1, 2])
+        self.assertTrue(stats["stopped_early"])
+        self.assertEqual(stats["global_steps_done"], 2)
+
+    def test_callback_can_capture_reloadable_student_weights(self):
+        saved_state = {}
+
+        def callback(info):
+            saved_state.update(
+                {
+                    name: tensor.detach().clone()
+                    for name, tensor in info["model"].state_dict().items()
+                }
+            )
+
+        distill_model(
+            self.student,
+            self.teacher,
+            self.dataloader,
+            epochs=1,
+            accumulation_steps=1,
+            step_callback=callback,
+            show_progress=False,
+        )
+
+        reloaded_student = MockSmallModel(num_layers=4)
+        reloaded_student.load_state_dict(saved_state)
+        for name, tensor in reloaded_student.state_dict().items():
+            torch.testing.assert_close(tensor, self.student.state_dict()[name])
+
+    def test_callback_validation(self):
+        with self.assertRaisesRegex(ValueError, "requires step_callback"):
+            distill_model(
+                self.student,
+                self.teacher,
+                self.dataloader,
+                callback_every_steps=1,
+            )
+
+        for invalid_interval in (0, -1, 1.5, True):
+            with self.subTest(interval=invalid_interval):
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    distill_model(
+                        self.student,
+                        self.teacher,
+                        self.dataloader,
+                        step_callback=lambda _: None,
+                        callback_every_steps=invalid_interval,
+                    )
+
+    def test_callback_exception_propagates_and_restores_cache(self):
+        student = MockSmallModel(num_layers=4, nested_config=True)
+        teacher = MockSmallModel(num_layers=6, nested_config=True)
+        student_text_config = get_text_config(student)
+
+        def callback(_):
+            raise RuntimeError("callback failed")
+
+        with self.assertRaisesRegex(RuntimeError, "callback failed"):
+            distill_model(
+                student,
+                teacher,
+                self.dataloader,
+                epochs=1,
+                accumulation_steps=1,
+                step_callback=callback,
+                show_progress=False,
+            )
+
+        self.assertFalse(hasattr(student.config, "use_cache"))
+        self.assertIs(student_text_config.use_cache, True)
+
+
 class TestDistillModelBatchFormats(unittest.TestCase):
 
     def setUp(self):
@@ -460,6 +758,22 @@ class TestDistillModelLayerStrategy(unittest.TestCase):
         )
         self.assertEqual(stats["layer_mapping_strategy"], MAPPING_LAST)
         self.assertIsInstance(stats["layer_map_used"], list)
+
+    def test_nested_text_config_maps_layers_in_distillation(self):
+        student = MockSmallModel(num_layers=4, nested_config=True)
+        teacher = MockSmallModel(num_layers=6, nested_config=True)
+        _, stats = distill_model(
+            student,
+            teacher,
+            self.dataloader,
+            layer_mapping_strategy=MAPPING_UNIFORM,
+            gamma=0.1,
+            epochs=1,
+            show_progress=False,
+            return_stats=True,
+        )
+
+        self.assertEqual(stats["layer_map_used"], [0, 1, 3, 4])
 
 
 if __name__ == "__main__":

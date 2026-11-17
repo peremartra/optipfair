@@ -50,6 +50,9 @@ def prune_model(
             
             **Compatibility:** Only works with neuron_selection_method='MAW' (PPM method).
             Will raise ValueError if used with 'VOW', 'PON', or 'L2'.
+            Padding positions are excluded when batches include an
+            `attention_mask`; activation statistics are accumulated independently
+            of how samples are grouped into batches.
             
             **Example:**
                 >>> from torch.utils.data import DataLoader, TensorDataset
@@ -107,14 +110,19 @@ def distill_model(
     accumulation_steps: int = 4,
     show_progress: bool = True,
     return_stats: bool = False,
+    step_callback: Optional[Callable[[Dict], Optional[bool]]] = None,
+    callback_every_steps: Optional[int] = None,
 ) -> Union[PreTrainedModel, Tuple[PreTrainedModel, Dict]]:
     """
     Distill a student model from a teacher model using compound losses.
 
     Args:
         student_model: Student model to train (updated in place)
+            Only parameters with `requires_grad=True` are optimized. Freeze
+            parameters before calling to control training and memory use.
         teacher_model: Teacher model used as distillation target
-        dataloader: Training dataloader yielding token batches
+        dataloader: Training dataloader yielding token batches. Dictionary
+            batches may include `labels`; positions set to -100 are ignored.
         layer_mapping_strategy: "uniform" or "last"
         alpha: Hard labels loss weight
         beta: Soft logits loss weight
@@ -129,6 +137,10 @@ def distill_model(
         accumulation_steps: Gradient accumulation steps (> 0)
         show_progress: Whether to show progress bars
         return_stats: Whether to return `(trained_model, stats)`
+        step_callback: Optional callback after optimizer steps; return True
+            to stop training cleanly.
+        callback_every_steps: Positive callback interval in optimizer steps;
+            defaults to every step when a callback is provided.
 
     Returns:
         Trained student model, or `(trained_model, stats_dict)` when
@@ -172,6 +184,27 @@ Validation constraints:
 - `warmup_ratio` must be in `[0.0, 1.0]`
 - `accumulation_steps` must be greater than `0`
 - Each batch must contain `input_ids`
+- The student must have at least one trainable parameter
+- `callback_every_steps` requires `step_callback` and must be a positive integer
+
+The caller controls which student parameters are trainable; `distill_model`
+does not freeze layers automatically. This can reduce gradient and optimizer
+memory, but does not guarantee that the teacher, student, and activations fit
+on a given device. See [Knowledge Distillation](knowledge_distillation.md)
+for memory guidance.
+
+Dictionary batches may provide explicit `labels`; positions set to `-100` are
+excluded from every loss component. Without explicit labels, targets are
+derived from `input_ids` and padding is masked by `attention_mask`. Tuple
+batches do not support explicit labels. The optional step callback receives
+the student, step counts, epoch, per-step losses, and current learning rate
+after optimizer/scheduler updates and gradient clearing. It can stop training
+by returning `True`; callback errors propagate, and cache settings are still
+restored. The callback payload keys are `model`, `global_step`, `total_steps`,
+`epoch`, `losses` (`total`, `task`, `logits`, `trajectory`, `derivative`), and
+`learning_rate`. With `return_stats=True`, callback runs add `stopped_early`
+and `global_steps_done` to stats. `loss_history` remains epoch-averaged.
+Without a callback, the existing return shape and stats keys are unchanged.
 
 See also: [Knowledge Distillation](knowledge_distillation.md)
 

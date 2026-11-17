@@ -93,6 +93,10 @@ pruned_model, stats = opf.prune_model(
     return_stats=True
 )
 
+# When batches are padded, include attention_mask. Calibration ignores padding
+# and accumulates squared activations across batches before taking L2 norms, so
+# the calibration scores do not depend on batch size.
+
 # Depth pruning examples
 pruned_model, stats = opf.prune_model(
     model=model,
@@ -237,6 +241,8 @@ trained_student = opf.distill_model(
     accumulation_steps=4,
     show_progress=True,
     return_stats=False,
+    step_callback=None,
+    callback_every_steps=None,
 )
 ```
 
@@ -245,7 +251,7 @@ trained_student = opf.distill_model(
 **Core models and data:**
 - `student_model`: PreTrainedModel to train (weights are updated in-place).
 - `teacher_model`: PreTrainedModel as distillation target (must be a different object than student).
-- `dataloader`: DataLoader yielding batches with `input_ids` (and optionally `attention_mask`). Labels are derived internally as `input_ids.clone()`.
+- `dataloader`: DataLoader yielding batches with `input_ids` (and optionally `attention_mask`). A dictionary batch may also include `labels`; positions set to `-100` are ignored by every loss component. Without labels, targets are derived from `input_ids` and padding positions are masked using `attention_mask`. Tuple/TensorDataset batches do not support explicit labels.
 
 **Loss weights** (at least one must be > 0):
 - `alpha` (0.6): Hard labels (task) loss weight — cross-entropy on ground truth.
@@ -266,6 +272,69 @@ trained_student = opf.distill_model(
 - `accumulation_steps` (4): Gradient accumulation steps; effective batch = `dataloader.batch_size × accumulation_steps`.
 - `show_progress` (True): Enable tqdm progress bars.
 - `return_stats` (False): If True, returns `(trained_model, stats_dict)` instead of just the model.
+- `step_callback` (None): Optional callback invoked after selected optimizer steps. Return `True` to stop training cleanly.
+- `callback_every_steps` (None): Callback interval in optimizer steps; defaults to every step when `step_callback` is provided. Must be a positive integer and requires a callback.
+
+#### Step callback
+
+The callback receives a dictionary containing the student `model`,
+`global_step` (starting at 1), planned `total_steps`, zero-based `epoch`,
+averaged `losses` (`total`, `task`, `logits`, `trajectory`, `derivative`), and
+the current `learning_rate`. It is called after the optimizer and scheduler
+steps and after gradients are cleared. It is not wrapped in `no_grad`; the
+student is returned to training mode after the callback returns. Exceptions
+propagate, and the cache settings are still restored.
+
+```python
+def on_step(info):
+    print(info["global_step"], info["losses"]["total"])
+    info["model"].save_pretrained(f"checkpoint-{info['global_step']}")
+    return False
+
+trained_student, stats = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=dataloader,
+    step_callback=on_step,
+    callback_every_steps=100,
+    return_stats=True,
+)
+```
+
+With a callback and `return_stats=True`, stats also contain `stopped_early`
+and `global_steps_done`. `loss_history` remains averaged per epoch. Callback
+checkpoints contain model weights only; optimizer and scheduler state are not
+saved, so this API does not resume a run at the interrupted step.
+Without a callback, the existing return shape and stats keys are unchanged.
+
+#### Controlling trainable parameters and memory
+
+`distill_model` updates only student parameters whose `requires_grad` flag is
+`True` at the start of training. The caller chooses what to train; the library
+does not freeze embeddings, vision encoders, or other components automatically.
+Freeze parameters before calling `distill_model`, or pass a PEFT-wrapped
+student if it preserves the model's forward interface. For example, adapt the
+parameter prefixes to the loaded architecture:
+
+```python
+frozen_prefixes = ("model.visual.", "model.embed_tokens.")
+for name, parameter in student_model.named_parameters():
+    if name.startswith(frozen_prefixes):
+        parameter.requires_grad_(False)
+
+trained_student = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=dataloader,
+)
+```
+
+Only trainable parameters are passed to AdamW. The logits loss computes
+softmax only at non-masked positions, reducing intermediate memory when labels
+mask part of a sequence. These measures do not guarantee that a large teacher
+and student fit on a specific GPU: model weights, activations, unmasked logits,
+and vocabulary size still determine peak memory. Gradient checkpointing and
+memory-efficient optimizers are not currently provided by `distill_model`.
 
 #### Validation Constraints
 
@@ -277,6 +346,8 @@ Raises `ValueError` if:
 - `warmup_ratio` outside `[0.0, 1.0]`.
 - `accumulation_steps <= 0`.
 - Batch does not contain `input_ids`.
+- The student has no trainable parameters.
+- `callback_every_steps` is provided without `step_callback` or is not a positive integer.
 
 Issues `UserWarning` if `gamma > 0` or `delta > 0` and loss weights do not sum to 1.0.
 
@@ -381,7 +452,7 @@ OptiPFair supports four methods for calculating neuron importance (used with MLP
    The `expansion_divisor` parameter ensures that the intermediate layer size is divisible by a specific value (32, 64, 128, or 256). This is useful for hardware optimization, as many accelerators perform better with tensor dimensions that are multiples of certain values.
    
    ```python
-   # Round intermediate size to nearest multiple of 128
+   # Round intermediate size down to a multiple of 128
     pruned_model = opf.prune_model(
        model=model,
        neuron_selection_method="MAW",
@@ -402,7 +473,7 @@ OptiPFair supports four methods for calculating neuron importance (used with MLP
    - Valid values: `None` (default), `32`, `64`, `128`, `256`
    - Cannot be used alone - requires either `pruning_percentage` or `expansion_rate`
    - Rounding occurs after calculating the target size from pruning/expansion parameters
-   - Rounds to the nearest multiple (up or down)
+   - Rounds down to the largest multiple not exceeding the target size
    - Useful for optimizing performance on specific hardware (GPUs, TPUs)
    - Common practice: use 128 or 256 for modern GPUs
 
@@ -1276,6 +1347,9 @@ importance_scores = opf.analyze_layer_importance(
 ```
 
 The importance score is computed token-by-token using cosine similarity over the hidden dimension. If the dataloader batch includes `attention_mask`, padding positions are masked out before the final average is calculated.
+
+Generation caches are disabled during these read-only forward passes when the
+model's `forward` method supports `use_cache`.
 
 #### Integration with Depth Pruning
 

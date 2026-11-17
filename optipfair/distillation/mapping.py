@@ -9,6 +9,8 @@ from typing import List
 
 from transformers import PreTrainedModel
 
+from ..pruning.utils import get_text_config
+
 MAPPING_UNIFORM = "uniform"
 MAPPING_LAST = "last"
 
@@ -68,8 +70,8 @@ def resolve_layer_map(
     Raises:
         ValueError: If strategy is not supported
     """
-    n_student = student_model.config.num_hidden_layers
-    n_teacher = teacher_model.config.num_hidden_layers
+    n_student = get_text_config(student_model).num_hidden_layers
+    n_teacher = get_text_config(teacher_model).num_hidden_layers
 
     if strategy == MAPPING_UNIFORM:
         return create_layer_map_uniform(n_student, n_teacher)
