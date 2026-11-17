@@ -83,7 +83,7 @@ def compute_distillation_loss(
             ignore_index=-100,
         )
     else:
-        loss_task = student_logits.sum() * 0.0
+        loss_task = student_logits[..., :0].sum()
 
     # Select valid positions before softmax to avoid full-sequence vocabulary tensors.
     # Teacher detached; student probs keep gradient through `mixed`. Detaching

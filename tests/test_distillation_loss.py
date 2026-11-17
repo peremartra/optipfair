@@ -335,6 +335,29 @@ class TestComputeDistillationLoss(unittest.TestCase):
         self.assertEqual(loss_dict["logits"], 0.0)
         self.assertTrue(torch.isfinite(student_logits.grad).all())
 
+    def test_all_masked_float16_large_logits_do_not_overflow(self):
+        labels = torch.full((1, 4), -100)
+        for alpha, beta in ((0.0, 1.0), (1.0, 0.0)):
+            with self.subTest(alpha=alpha, beta=beta):
+                student_logits = torch.ones(1, 4, 65536, dtype=torch.float16, requires_grad=True)
+                teacher_logits = torch.ones_like(student_logits)
+
+                loss, loss_dict = compute_distillation_loss(
+                    student_logits,
+                    teacher_logits,
+                    None,
+                    None,
+                    labels,
+                    alpha=alpha,
+                    beta=beta,
+                )
+                loss.backward()
+
+                self.assertEqual(loss.item(), 0.0)
+                self.assertEqual(loss_dict["task"], 0.0)
+                self.assertEqual(loss_dict["logits"], 0.0)
+                torch.testing.assert_close(student_logits.grad, torch.zeros_like(student_logits))
+
 
 if __name__ == "__main__":
     unittest.main()
