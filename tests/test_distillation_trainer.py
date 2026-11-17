@@ -42,8 +42,8 @@ class MockSmallModel(nn.Module):
             text_config = PretrainedConfig(
                 num_hidden_layers=num_layers,
                 hidden_size=hidden_size,
-                use_cache=True,
             )
+            text_config.use_cache = True
             self.config = PretrainedConfig(text_config=text_config)
             self.config.text_config = text_config
         else:

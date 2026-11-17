@@ -43,6 +43,7 @@ def compute_distillation_loss(
     Args:
         student_logits: Student logits with shape [batch, seq_len, vocab_size].
         teacher_logits: Teacher logits with shape [batch, seq_len, vocab_size].
+            Detached from the logits loss.
         student_hiddens: Student hidden states, one tensor per aligned layer.
         teacher_hiddens: Teacher hidden states, one tensor per aligned layer.
         labels: Target token ids with shape [batch, seq_len].
@@ -89,18 +90,17 @@ def compute_distillation_loss(
     # student_probs here makes the gradient of loss_logits identically zero,
     # since the mixture is the only path back to the student's parameters.
     valid_student_logits = student_logits[..., :-1, :][valid_mask]
-    valid_teacher_logits = teacher_logits[..., :-1, :][valid_mask]
-    teacher_log_probs = F.log_softmax(valid_teacher_logits / temperature, dim=-1)
-    student_log_probs = F.log_softmax(valid_student_logits / temperature, dim=-1)
-    teacher_probs = teacher_log_probs.exp().detach()
-    student_probs = student_log_probs.exp()  # NO detach: this is where the gradient enters
+    valid_teacher_logits = teacher_logits[..., :-1, :].detach()[valid_mask]
+    teacher_probs = F.softmax(valid_teacher_logits / temperature, dim=-1)
+    student_probs = F.softmax(valid_student_logits / temperature, dim=-1)
 
     mixed_probs = skew_alpha * student_probs + (1.0 - skew_alpha) * teacher_probs
 
     eps = 1e-9
+    log_teacher = torch.log(teacher_probs + eps)
     log_mixed = torch.log(mixed_probs + eps)
 
-    kl_per_token = (teacher_probs * (teacher_log_probs - log_mixed)).sum(dim=-1)
+    kl_per_token = (teacher_probs * (log_teacher - log_mixed)).sum(dim=-1)
     loss_logits = kl_per_token.sum() / num_valid
     loss_logits = loss_logits * (temperature ** 2)
 

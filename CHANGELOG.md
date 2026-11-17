@@ -1,6 +1,8 @@
 ## [Unreleased]
 
-- No changes yet.
+- Fixed the skewed logits loss using symmetric numerical stabilization, avoiding a
+  vocabulary-size-dependent negative offset, and detached teacher logits for direct
+  calls to `compute_distillation_loss()`.
 
 ---
 

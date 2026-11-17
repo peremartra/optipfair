@@ -246,6 +246,75 @@ class TestComputeDistillationLoss(unittest.TestCase):
         self.assertAlmostEqual(loss_dict["logits"], reference_loss.item(), places=6)
         torch.testing.assert_close(actual_gradient, reference_student.grad, rtol=1e-5, atol=1e-7)
 
+    def test_equal_logits_with_large_vocabulary_have_near_zero_loss(self):
+        torch.manual_seed(53)
+        logits = torch.randn(1, 2, 248320)
+        labels = torch.tensor([[0, 1]])
+
+        for temperature in (1.0, 2.0):
+            with self.subTest(temperature=temperature):
+                _, loss_dict = compute_distillation_loss(
+                    logits,
+                    logits,
+                    None,
+                    None,
+                    labels,
+                    alpha=0.0,
+                    beta=1.0,
+                    temperature=temperature,
+                )
+                self.assertGreaterEqual(loss_dict["logits"], -5e-7)
+                self.assertLessEqual(abs(loss_dict["logits"]), 5e-7)
+
+    def test_large_vocabulary_loss_and_gradient_match_symmetric_reference(self):
+        torch.manual_seed(53)
+        student = torch.randn(1, 3, 248320, requires_grad=True)
+        teacher = torch.randn(1, 3, 248320, requires_grad=True)
+        labels = torch.tensor([[0, 1, -100]])
+        temperature = 2.0
+        skew_alpha = 0.4
+
+        loss, loss_dict = compute_distillation_loss(
+            student,
+            teacher,
+            None,
+            None,
+            labels,
+            alpha=0.0,
+            beta=1.0,
+            temperature=temperature,
+            skew_alpha=skew_alpha,
+        )
+        loss.backward()
+
+        reference_student = student.detach().clone().requires_grad_(True)
+        teacher_probs = torch.softmax(teacher.detach()[:, 0, :] / temperature, dim=-1)
+        student_probs = torch.softmax(reference_student[:, 0, :] / temperature, dim=-1)
+        mixed_probs = skew_alpha * student_probs + (1.0 - skew_alpha) * teacher_probs
+        reference = (
+            teacher_probs * (torch.log(teacher_probs + 1e-9) - torch.log(mixed_probs + 1e-9))
+        ).sum() * temperature**2
+        reference.backward()
+
+        self.assertAlmostEqual(loss_dict["logits"], reference.item(), delta=1e-6)
+        self.assertIsNone(teacher.grad)
+        self.assertGreater(student.grad.norm().item(), 0.0)
+        torch.testing.assert_close(student.grad, reference_student.grad, rtol=1e-5, atol=1e-9)
+
+    def test_logits_loss_does_not_backpropagate_to_teacher(self):
+        torch.manual_seed(53)
+        student = torch.randn(1, 3, 32, requires_grad=True)
+        teacher = torch.randn(1, 3, 32, requires_grad=True)
+        labels = torch.tensor([[0, 1, 2]])
+
+        loss, _ = compute_distillation_loss(
+            student, teacher, None, None, labels, alpha=0.0, beta=1.0
+        )
+        loss.backward()
+
+        self.assertIsNone(teacher.grad)
+        self.assertGreater(student.grad.norm().item(), 0.0)
+
     def test_logits_loss_handles_batches_without_valid_tokens(self):
         student_logits = torch.randn(1, 4, 16, requires_grad=True)
         teacher_logits = torch.randn(1, 4, 16)
