@@ -24,7 +24,7 @@ from .pruning.utils import (
     get_model_layers,
 )
 
-__version__ = "0.5.0"
+__version__ = "0.5.0.dev0"
 
 # Configure logging
 logging.basicConfig(
