@@ -243,6 +243,8 @@ trained_student = opf.distill_model(
     return_stats=False,
     step_callback=None,
     callback_every_steps=None,
+    *,
+    layer_map=None,
 )
 ```
 
@@ -263,6 +265,38 @@ trained_student = opf.distill_model(
 - `temperature` (2.0): Softening factor for logits distillation.
 - `skew_alpha` (0.4): Interpolation factor between student and teacher soft targets.
 - `layer_mapping_strategy` ("uniform"): `"uniform"` (proportional) or `"last"` (deepest layers). Used only when `gamma > 0` or `delta > 0`.
+- `layer_map` (None): Optional keyword-only list mapping each student block to a teacher block. When supplied, it takes precedence over `layer_mapping_strategy`; otherwise the existing `uniform` or `last` mapping is used.
+
+**Explicit layer mapping:**
+- Each entry is an index into the teacher block outputs in `hidden_states[1:]`; index 0 is the first decoder block, not the embedding state.
+- The map must contain exactly one in-range integer index per student block. Boolean values and negative indices are rejected.
+- Repeated or out-of-order indices are allowed when using `gamma` without `delta`. When `delta > 0`, an explicit map must be strictly increasing so consecutive student transitions align with forward-moving teacher transitions.
+- If a map is supplied while both `gamma` and `delta` are zero, it is still validated, then a `UserWarning` says it will not be used. In this case `layer_map_used` and `layer_mapping_strategy` remain `None`.
+- When active, stats report `layer_mapping_strategy="explicit"` and the applied list in `layer_map_used`.
+
+`uniform` and `last` do not know which specific blocks were removed by non-uniform depth pruning. For hybrid architectures, they can align different block types (for example, linear-attention and full-attention blocks) or include teacher blocks that the student no longer has. Supply the original teacher indices explicitly to preserve block correspondence.
+
+For example, after removing blocks `[1, 4, 24, 25, 26, 27, 28, 29]` from a 32-block teacher, the 24 retained student blocks correspond to:
+
+```python
+layer_map = [
+    0, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+    14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 30, 31,
+]
+
+trained_student = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=dataloader,
+    layer_map=layer_map,
+    gamma=0.1,
+    delta=0.1,
+    alpha=0.4,
+    beta=0.4,
+)
+```
+
+Final hidden-state normalization is architecture-dependent: some models apply a final norm to the last returned state but not to intermediate block states. In those models, mapping the final student block to an intermediate teacher block may compare normalized and unnormalized states. The example above maps the final student block 23 to the teacher's final block 31, avoiding that particular final-versus-intermediate comparison.
 
 **Training configuration:**
 - `epochs` (3): Training epochs.
@@ -341,7 +375,10 @@ memory-efficient optimizers are not currently provided by `distill_model`.
 Raises `ValueError` if:
 - `alpha + beta + gamma + delta == 0`.
 - `student_model is teacher_model`.
-- `layer_mapping_strategy` not in `{"uniform", "last"}`.
+- `layer_map` is omitted and `layer_mapping_strategy` is not in `{"uniform", "last"}`.
+- An explicit `layer_map` does not have one in-range integer per student block, contains a boolean, or contains a negative index.
+- An explicit `layer_map` is not strictly increasing when `delta > 0`.
+- Either model returns a different number of hidden states than its configured block count (checked on the first feature-loss forward for all mapping methods).
 - `scheduler` not in `{"cosine", "none"}`.
 - `warmup_ratio` outside `[0.0, 1.0]`.
 - `accumulation_steps <= 0`.
@@ -349,7 +386,7 @@ Raises `ValueError` if:
 - The student has no trainable parameters.
 - `callback_every_steps` is provided without `step_callback` or is not a positive integer.
 
-Issues `UserWarning` if `gamma > 0` or `delta > 0` and loss weights do not sum to 1.0.
+Issues `UserWarning` if `gamma > 0` or `delta > 0` and loss weights do not sum to 1.0, or if `layer_map` is supplied while both feature-loss weights are zero.
 
 #### Implementation Notes
 

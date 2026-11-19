@@ -2,6 +2,7 @@
 Tests for the distillation trainer module.
 """
 
+import inspect
 import os
 import sys
 import unittest
@@ -14,6 +15,7 @@ from transformers import PretrainedConfig
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from optipfair.distillation.loss import compute_distillation_loss
 from optipfair.distillation.mapping import MAPPING_LAST, MAPPING_UNIFORM
 from optipfair.distillation.trainer import distill_model
 from optipfair.pruning.utils import get_text_config
@@ -80,6 +82,20 @@ class MockSmallModel(nn.Module):
             else None
         )
         return MockModelOutput(logits=logits, hidden_states=all_hidden_states)
+
+
+class MockMalformedHiddenStatesModel(MockSmallModel):
+    """Model that returns fewer hidden states than its configured layer count."""
+
+    def forward(self, input_ids, attention_mask=None, output_hidden_states=False):
+        outputs = super().forward(
+            input_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=output_hidden_states,
+        )
+        if output_hidden_states:
+            outputs.hidden_states = outputs.hidden_states[:-1]
+        return outputs
 
 
 class DictDataset(torch.utils.data.Dataset):
@@ -174,6 +190,56 @@ class TestDistillModelValidation(unittest.TestCase):
                 layer_mapping_strategy="original_indices",
                 gamma=0.1,
             )
+
+    def test_explicit_map_must_be_a_list_of_valid_teacher_indices(self):
+        invalid_maps = (
+            ([0, 1], 0.1, 0.0),
+            ([0, 1, 2, 6], 0.1, 0.0),
+            ([0, 1, 2, -1], 0.1, 0.0),
+            ([0, 1, True, 3], 0.1, 0.0),
+            ((0, 1, 2, 3), 0.1, 0.0),
+            ([0, 2, 1, 3], 0.1, 0.1),
+        )
+
+        for layer_map, gamma, delta in invalid_maps:
+            with self.subTest(layer_map=layer_map, delta=delta):
+                with self.assertRaises(ValueError):
+                    distill_model(
+                        self.student,
+                        self.teacher,
+                        self.dataloader,
+                        layer_map=layer_map,
+                        gamma=gamma,
+                        delta=delta,
+                    )
+
+    def test_explicit_map_is_keyword_only(self):
+        parameter = inspect.signature(distill_model).parameters["layer_map"]
+        self.assertEqual(parameter.kind, inspect.Parameter.KEYWORD_ONLY)
+
+    def test_hidden_state_count_mismatch_fails_before_loss(self):
+        student = MockMalformedHiddenStatesModel(num_layers=4)
+        teacher = MockSmallModel(num_layers=6)
+
+        with patch(
+            "optipfair.distillation.trainer.compute_distillation_loss",
+            wraps=compute_distillation_loss,
+        ) as mocked_loss:
+            with self.assertRaisesRegex(
+                ValueError,
+                r"student returned 3 \(expected 4\), teacher returned 6 \(expected 6\)",
+            ):
+                distill_model(
+                    student,
+                    teacher,
+                    make_tuple_dataloader(num_batches=1),
+                    gamma=0.1,
+                    epochs=1,
+                    scheduler="none",
+                    show_progress=False,
+                )
+
+        mocked_loss.assert_not_called()
 
     def test_raises_if_invalid_scheduler(self):
         with self.assertRaises(ValueError):
@@ -774,6 +840,92 @@ class TestDistillModelLayerStrategy(unittest.TestCase):
         )
 
         self.assertEqual(stats["layer_map_used"], [0, 1, 3, 4])
+
+
+class TestDistillModelExplicitLayerMap(unittest.TestCase):
+
+    def test_non_contiguous_map_reaches_delta_loss_and_stats(self):
+        student = MockSmallModel(num_layers=3)
+        teacher = MockSmallModel(num_layers=5)
+        layer_map = [0, 2, 3]
+
+        with patch(
+            "optipfair.distillation.trainer.compute_distillation_loss",
+            wraps=compute_distillation_loss,
+        ) as mocked_loss:
+            _, stats = distill_model(
+                student,
+                teacher,
+                make_tuple_dataloader(num_batches=1),
+                layer_mapping_strategy="ignored-by-explicit-map",
+                layer_map=layer_map,
+                gamma=0.1,
+                delta=0.1,
+                alpha=0.4,
+                beta=0.4,
+                epochs=1,
+                accumulation_steps=1,
+                scheduler="none",
+                show_progress=False,
+                return_stats=True,
+            )
+
+        self.assertEqual(mocked_loss.call_args.kwargs["layer_map"], layer_map)
+        self.assertEqual(stats["layer_mapping_strategy"], "explicit")
+        self.assertEqual(stats["layer_map_used"], layer_map)
+
+    def test_repeated_and_unordered_map_is_allowed_without_delta(self):
+        student = MockSmallModel(num_layers=4)
+        teacher = MockSmallModel(num_layers=6)
+        layer_map = [4, 2, 2, 0]
+
+        _, stats = distill_model(
+            student,
+            teacher,
+            make_tuple_dataloader(num_batches=1),
+            layer_map=layer_map,
+            gamma=0.1,
+            epochs=1,
+            accumulation_steps=1,
+            scheduler="none",
+            show_progress=False,
+            return_stats=True,
+        )
+
+        self.assertEqual(stats["layer_map_used"], layer_map)
+
+    def test_map_without_feature_losses_warns_and_is_not_reported_as_used(self):
+        student = MockSmallModel(num_layers=4)
+        teacher = MockSmallModel(num_layers=6)
+        with self.assertWarnsRegex(UserWarning, "will not be used"):
+            _, stats = distill_model(
+                student,
+                teacher,
+                make_tuple_dataloader(num_batches=1),
+                layer_map=[0, 1, 2, 3],
+                epochs=1,
+                scheduler="none",
+                show_progress=False,
+                return_stats=True,
+            )
+
+        self.assertIsNone(stats["layer_map_used"])
+        self.assertIsNone(stats["layer_mapping_strategy"])
+
+    def test_invalid_map_is_rejected_without_feature_losses(self):
+        student = MockSmallModel(num_layers=4)
+        teacher = MockSmallModel(num_layers=6)
+
+        with self.assertRaisesRegex(ValueError, "one index per student layer"):
+            distill_model(
+                student,
+                teacher,
+                make_tuple_dataloader(num_batches=1),
+                layer_map=[0, 1],
+                epochs=1,
+                scheduler="none",
+                show_progress=False,
+            )
 
 
 if __name__ == "__main__":

@@ -83,12 +83,62 @@ trained_student = opf.distill_model(
 - `temperature`: Soft logits temperature.
 - `skew_alpha`: Interpolation between student/teacher soft targets.
 - `layer_mapping_strategy`: `"uniform"` or `"last"` (used when `gamma > 0` or `delta > 0`).
+- `layer_map`: Optional keyword-only teacher block index per student block. Overrides the strategy and must be strictly increasing when `delta > 0`.
 - `scheduler`: `"cosine"` or `"none"`.
 - `warmup_ratio`: Warmup fraction in `[0.0, 1.0]`.
 - `accumulation_steps`: Positive integer.
 - `step_callback`: Optional function called after optimizer steps.
 - `callback_every_steps`: Positive interval in optimizer steps; defaults to
   every step when a callback is provided.
+
+### Explicit Layer Mapping
+
+`layer_map` maps each student block to a teacher block by index. These are
+decoder-block output indices: index `t` refers to teacher block `t` in
+`hidden_states[1:]`; the embedding state at index `0` is excluded. The map must
+have one in-range integer (not a boolean) per student block. Repeated and
+out-of-order indices are allowed with `gamma` alone. When `delta > 0`, an
+explicit map must be strictly increasing so consecutive student transitions
+align with forward-moving teacher transitions.
+
+`uniform` spreads student blocks across the teacher depth, and `last` aligns
+them to the teacher's final blocks. Neither strategy knows which original
+blocks were removed by non-uniform depth pruning. In hybrid models, a generated
+map can therefore align different block types, such as linear-attention and
+full-attention blocks, or point at teacher blocks that were removed from the
+student. Pass the original teacher indices explicitly to preserve those
+alignments.
+
+For example, if a 32-block teacher is pruned by removing blocks
+`[1, 4, 24, 25, 26, 27, 28, 29]`, the remaining 24 blocks map as follows:
+
+```python
+layer_map = [
+    0, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+    14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 30, 31,
+]
+
+student, stats = opf.distill_model(
+    student_model=student_model,
+    teacher_model=teacher_model,
+    dataloader=train_dataloader,
+    layer_map=layer_map,
+    gamma=0.1,
+    delta=0.1,
+    alpha=0.4,
+    beta=0.4,
+    return_stats=True,
+)
+```
+
+The final student block maps to teacher block 31 in this example. In
+architectures where the final returned hidden state has passed through a final
+normalization layer but intermediate block states have not, matching the last
+block to the last block avoids that particular final-versus-intermediate
+comparison. This behavior is model-dependent. When `gamma` and `delta` are both
+zero, a supplied map is validated and a warning explains that it will not be
+used. `stats["layer_mapping_strategy"]` reports `"explicit"` when the map is
+active, and `stats["layer_map_used"]` contains the applied map.
 
 ### Labels and step callbacks
 

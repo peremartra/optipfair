@@ -112,6 +112,8 @@ def distill_model(
     return_stats: bool = False,
     step_callback: Optional[Callable[[Dict], Optional[bool]]] = None,
     callback_every_steps: Optional[int] = None,
+    *,
+    layer_map: Optional[List[int]] = None,
 ) -> Union[PreTrainedModel, Tuple[PreTrainedModel, Dict]]:
     """
     Distill a student model from a teacher model using compound losses.
@@ -124,6 +126,8 @@ def distill_model(
         dataloader: Training dataloader yielding token batches. Dictionary
             batches may include `labels`; positions set to -100 are ignored.
         layer_mapping_strategy: "uniform" or "last"
+        layer_map: Optional teacher block index per student block. Overrides
+            `layer_mapping_strategy`; must be strictly increasing when `delta > 0`.
         alpha: Hard labels loss weight
         beta: Soft logits loss weight
         gamma: Hidden-state trajectory loss weight
@@ -179,13 +183,20 @@ Validation constraints:
 
 - `alpha + beta + gamma + delta` must not be zero
 - `student_model` and `teacher_model` must be different objects
-- `layer_mapping_strategy` must be `"uniform"` or `"last"`
+- If `layer_map` is omitted, `layer_mapping_strategy` must be `"uniform"` or `"last"`
+- An explicit `layer_map` must have one in-range integer index per student block; booleans are not accepted
+- An explicit `layer_map` must be strictly increasing when `delta > 0`
 - `scheduler` must be `"cosine"` or `"none"`
 - `warmup_ratio` must be in `[0.0, 1.0]`
 - `accumulation_steps` must be greater than `0`
 - Each batch must contain `input_ids`
 - The student must have at least one trainable parameter
 - `callback_every_steps` requires `step_callback` and must be a positive integer
+
+When `gamma` and `delta` are both zero, a supplied `layer_map` is validated but
+not used, and a warning is emitted. With feature losses active, each model must
+return one hidden state per configured block after the embedding state;
+otherwise training raises `ValueError` before computing the loss.
 
 The caller controls which student parameters are trainable; `distill_model`
 does not freeze layers automatically. This can reduce gradient and optimizer

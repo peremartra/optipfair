@@ -91,6 +91,8 @@ def distill_model(
     return_stats: bool = False,
     step_callback: Optional[Callable[[Dict[str, Any]], Optional[bool]]] = None,
     callback_every_steps: Optional[int] = None,
+    *,
+    layer_map: Optional[List[int]] = None,
 ) -> Union[PreTrainedModel, Tuple[PreTrainedModel, Dict]]:
     """
     Distill a student model from a teacher model using compound losses.
@@ -105,6 +107,9 @@ def distill_model(
             loss components. Without `labels`, targets come from `input_ids`
             and are masked by `attention_mask` when present.
         layer_mapping_strategy: Layer mapping strategy ("uniform" or "last").
+        layer_map: Optional explicit teacher block index for each student block.
+            Takes precedence over `layer_mapping_strategy`. Required to be
+            strictly increasing when `delta > 0`.
         alpha: Hard labels weight.
         beta: Soft labels weight.
         gamma: Feature alignment weight.
@@ -130,8 +135,9 @@ def distill_model(
     Raises:
         ValueError: If loss weights are all zero, models are the same object,
             accumulation_steps is invalid, inputs are malformed, or mapping
-            strategy is unsupported, callback arguments are invalid, or the
-            student has no trainable parameters.
+            configuration is invalid, callback arguments are invalid, hidden
+            state counts do not match model depths, or the student has no
+            trainable parameters.
     """
     total_weight = alpha + beta + gamma + delta
     if math.isclose(total_weight, 0.0):
@@ -140,8 +146,34 @@ def distill_model(
     if student_model is teacher_model:
         raise ValueError("student_model and teacher_model must be different objects.")
 
-    if layer_mapping_strategy not in (MAPPING_UNIFORM, MAPPING_LAST):
+    if layer_map is None and layer_mapping_strategy not in (MAPPING_UNIFORM, MAPPING_LAST):
         raise ValueError(f"Unsupported layer_mapping_strategy: '{layer_mapping_strategy}'.")
+
+    request_hidden_states = gamma > 0 or delta > 0
+    n_student = n_teacher = 0
+    if layer_map is not None or request_hidden_states:
+        n_student = get_text_config(student_model).num_hidden_layers
+        n_teacher = get_text_config(teacher_model).num_hidden_layers
+    if layer_map is not None:
+        if not isinstance(layer_map, list):
+            raise ValueError("layer_map must be a list of teacher layer indices.")
+        if len(layer_map) != n_student:
+            raise ValueError(
+                f"layer_map must contain one index per student layer ({n_student}); "
+                f"received {len(layer_map)}."
+            )
+        if any(not isinstance(index, int) or isinstance(index, bool) for index in layer_map):
+            raise ValueError("layer_map indices must be integers and must not be booleans.")
+        if any(index < 0 or index >= n_teacher for index in layer_map):
+            raise ValueError(
+                f"layer_map indices must be between 0 and {n_teacher - 1}."
+            )
+        if delta > 0 and any(
+            current >= following for current, following in zip(layer_map, layer_map[1:])
+        ):
+            raise ValueError(
+                "layer_map must be strictly increasing when delta > 0."
+            )
 
     if scheduler not in ("cosine", "none"):
         raise ValueError("scheduler must be one of {'cosine', 'none'}.")
@@ -182,13 +214,24 @@ def distill_model(
     student_model.train()
     teacher_model.eval()
 
-    request_hidden_states = gamma > 0 or delta > 0
     layer_map_used: Optional[List[int]] = None
     layer_mapping_strategy_used: Optional[str] = None
 
     if request_hidden_states:
-        layer_map_used = resolve_layer_map(student_model, teacher_model, layer_mapping_strategy)
-        layer_mapping_strategy_used = layer_mapping_strategy
+        if layer_map is None:
+            layer_map_used = resolve_layer_map(
+                student_model, teacher_model, layer_mapping_strategy
+            )
+            layer_mapping_strategy_used = layer_mapping_strategy
+        else:
+            layer_map_used = list(layer_map)
+            layer_mapping_strategy_used = "explicit"
+    elif layer_map is not None:
+        warnings.warn(
+            "layer_map was provided but will not be used because gamma and delta are both 0.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     trainable_parameters = [
         parameter for parameter in student_model.parameters() if parameter.requires_grad
@@ -206,6 +249,7 @@ def distill_model(
     warmup_steps = int(scheduler_total_steps * warmup_ratio)
     cosine_steps = scheduler_total_steps - warmup_steps
 
+    hidden_state_counts_checked = not request_hidden_states
     scheduler_instance = None
     if scheduler == "cosine" and scheduler_total_steps > 0:
         if warmup_steps <= 0:
@@ -326,12 +370,41 @@ def distill_model(
                     output_hidden_states=request_hidden_states,
                 )
 
+            student_hidden_states = (
+                getattr(student_outputs, "hidden_states", None)
+                if request_hidden_states
+                else None
+            )
+            teacher_hidden_states = (
+                getattr(teacher_outputs, "hidden_states", None)
+                if request_hidden_states
+                else None
+            )
             student_hiddens = (
-                list(student_outputs.hidden_states[1:]) if request_hidden_states else None
+                list(student_hidden_states[1:])
+                if student_hidden_states is not None
+                else None
             )
             teacher_hiddens = (
-                list(teacher_outputs.hidden_states[1:]) if request_hidden_states else None
+                list(teacher_hidden_states[1:])
+                if teacher_hidden_states is not None
+                else None
             )
+
+            if request_hidden_states and not hidden_state_counts_checked:
+                student_hidden_count = (
+                    len(student_hiddens) if student_hiddens is not None else None
+                )
+                teacher_hidden_count = (
+                    len(teacher_hiddens) if teacher_hiddens is not None else None
+                )
+                if student_hidden_count != n_student or teacher_hidden_count != n_teacher:
+                    raise ValueError(
+                        "Hidden-state counts do not match configured model depths: "
+                        f"student returned {student_hidden_count} (expected {n_student}), "
+                        f"teacher returned {teacher_hidden_count} (expected {n_teacher})."
+                    )
+                hidden_state_counts_checked = True
 
             loss, loss_dict = compute_distillation_loss(
                 student_logits=student_outputs.logits,
