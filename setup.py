@@ -25,6 +25,7 @@ setup(
     install_requires=[
         "torch>1.11.0",
         "transformers>=4.25.0",
+        "tokenizers>=0.13.0",
         "tqdm>=4.62.0",
         "click>=8.0.0",
         "numpy>=1.20.0",
