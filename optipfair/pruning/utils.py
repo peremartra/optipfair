@@ -8,7 +8,7 @@ layer extraction, and other common tasks needed across different pruning methods
 import inspect
 import logging
 import torch
-from typing import List, Optional, Union, Any, Dict
+from typing import List, Optional, Any, Dict
 from transformers import PretrainedConfig, PreTrainedModel
 
 logger = logging.getLogger(__name__)
@@ -325,6 +325,48 @@ def get_depth_pruning_statistics(
     }
     
     return stats
+
+
+def get_vocab_pruning_statistics(
+    original_params: int,
+    original_vocab_size: int,
+    pruned_model: PreTrainedModel,
+) -> Dict[str, Any]:
+    """
+    Calculate statistics for vocabulary pruning operations.
+
+    Like get_depth_pruning_statistics(), it takes counts captured before
+    pruning instead of a deepcopy of the original model.
+
+    Args:
+        original_params: Parameter count before pruning
+        original_vocab_size: Number of embedding rows before pruning
+        pruned_model: Model after vocabulary pruning
+
+    Returns:
+        Dictionary with keys original_parameters, pruned_parameters, reduction,
+        percentage_reduction, original_vocab_size, pruned_vocab_size and
+        vocab_reduction_percentage.
+    """
+    pruned_params = count_parameters(pruned_model)
+    pruned_vocab_size = pruned_model.get_input_embeddings().weight.shape[0]
+
+    reduction = original_params - pruned_params
+    percentage_reduction = (reduction / original_params) * 100 if original_params > 0 else 0.0
+    vocab_reduction = original_vocab_size - pruned_vocab_size
+    vocab_reduction_percentage = (
+        (vocab_reduction / original_vocab_size) * 100 if original_vocab_size > 0 else 0.0
+    )
+
+    return {
+        "original_parameters": original_params,
+        "pruned_parameters": pruned_params,
+        "reduction": reduction,
+        "percentage_reduction": percentage_reduction,
+        "original_vocab_size": original_vocab_size,
+        "pruned_vocab_size": pruned_vocab_size,
+        "vocab_reduction_percentage": vocab_reduction_percentage,
+    }
 
 
 def _prepare_batch_inputs(batch: Any, device: torch.device) -> Dict[str, torch.Tensor]:
