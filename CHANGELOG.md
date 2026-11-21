@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+- Added vocabulary pruning (`optipfair.pruning.vocab`): `prune_model_vocab()` keeps the
+  calibration corpus's most frequent tokens plus specials, byte tokens and every BPE merge
+  ancestor, and returns the pruned model, a matching fast tokenizer and the `new2old` id map.
+  Also available as `prune_model(pruning_type="VOCAB", tokenizer=..., calibration_dataset=...,
+  keep_top_k=...)`, which returns `(model, tokenizer[, stats])`, and from the CLI as
+  `optipfair prune-vocab`. `save_vocab_pruned()` writes the model, tokenizer and
+  `vocab_mapping.json`. Token ranking is pluggable via `token_selection_method` (`"frequency"`,
+  `"document_frequency"`, or a callable taking a `VocabScoringContext`; registry in
+  `TOKEN_SCORING_METHODS`, CLI `--method`). New `get_vocab_pruning_statistics()` helper. Fast BPE tokenizers only;
+  distillation from a full-vocabulary teacher is not supported yet.
 - Fixed the skewed logits loss using symmetric numerical stabilization, avoiding a
   vocabulary-size-dependent negative offset, and detached teacher logits for direct
   calls to `compute_distillation_loss()`.

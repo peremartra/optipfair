@@ -5,15 +5,75 @@ This module provides the CLI commands for pruning models and related operations.
 """
 
 import click
+import json
 import logging
 import os
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
 from .. import prune_model
-from ..pruning.utils import count_parameters
+from ..pruning.utils import count_parameters, get_vocab_pruning_statistics
+from ..pruning.vocab import TOKEN_SCORING_METHODS, prune_model_vocab, save_vocab_pruned
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_device_dtype(device, dtype):
+    """Resolve the CLI's 'auto' device/dtype choices to concrete values."""
+    if device == 'auto':
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    if dtype == 'auto':
+        if 'cuda' in device and torch.cuda.is_available():
+            if torch.cuda.get_device_capability()[0] >= 8:  # Ampere or newer
+                return device, torch.bfloat16
+            return device, torch.float16
+        return device, torch.float32
+
+    dtype_map = {
+        'float32': torch.float32,
+        'float16': torch.float16,
+        'bfloat16': torch.bfloat16,
+    }
+    return device, dtype_map[dtype]
+
+
+def _load_calibration_data(path, split=None):
+    """Load calibration texts for vocabulary pruning.
+
+    Supports a directory saved with ``datasets.save_to_disk``, a ``.jsonl``
+    file (one JSON object or string per line), a ``.json`` file holding a
+    list, or any other text file (one document per non-empty line).
+    """
+    if os.path.isdir(path):
+        try:
+            from datasets import load_from_disk
+        except ImportError as exc:
+            raise click.UsageError(
+                "Loading a dataset directory requires the 'datasets' package "
+                "(pip install optipfair[eval])."
+            ) from exc
+        data = load_from_disk(path)
+        if split is not None:
+            if split not in data:
+                raise click.UsageError(f"Split '{split}' not found in {path}.")
+            data = data[split]
+        return data
+
+    if split is not None:
+        raise click.UsageError(
+            "--split is only valid when --calibration-data is a dataset directory."
+        )
+
+    with open(path, encoding='utf-8') as f:
+        if path.endswith('.jsonl'):
+            return [json.loads(line) for line in f if line.strip()]
+        if path.endswith('.json'):
+            data = json.load(f)
+            if not isinstance(data, list):
+                raise click.UsageError("A .json calibration file must contain a list of rows.")
+            return data
+        return [line.rstrip('\n') for line in f if line.strip()]
 
 @click.group()
 def cli():
@@ -109,27 +169,8 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
         depth_pruning_percentage = pruning_percentage
         pruning_percentage = None  # Clear for MLP compatibility
     
-    # Determine device
-    if device == 'auto':
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    # Determine dtype
-    if dtype == 'auto':
-        if 'cuda' in device and torch.cuda.is_available():
-            if torch.cuda.get_device_capability()[0] >= 8:  # Ampere or newer
-                dtype = torch.bfloat16
-            else:
-                dtype = torch.float16
-        else:
-            dtype = torch.float32
-    else:
-        dtype_map = {
-            'float32': torch.float32,
-            'float16': torch.float16,
-            'bfloat16': torch.bfloat16,
-        }
-        dtype = dtype_map[dtype]
-    
+    device, dtype = _resolve_device_dtype(device, dtype)
+
     logger.info(f"Loading model from {model_path} to {device} with {dtype}")
     
     # Load model and tokenizer
@@ -214,6 +255,88 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
     pruned_model.save_pretrained(output_path)
     tokenizer.save_pretrained(output_path)
     
+    logger.info("Done!")
+
+
+@cli.command('prune-vocab')
+@click.option('--model-path', required=True, help='Path or identifier of the model to prune.')
+@click.option('--calibration-data', required=True, type=click.Path(exists=True),
+              help='Domain texts used to measure token usage: a datasets.save_to_disk directory, '
+                   'a .jsonl/.json file, or a text file with one document per line.')
+@click.option('--split', default=None,
+              help='Split to use when --calibration-data is a DatasetDict.')
+@click.option('--text-field', default=None,
+              help='Field holding the text in each row (default: text, calibration_text, ...).')
+@click.option('--keep-top-k', required=True, type=click.IntRange(min=0),
+              help='Number of highest-scoring tokens to keep in addition to special '
+                   'and byte tokens.')
+@click.option('--method', 'token_selection_method', default='frequency',
+              type=click.Choice(list(TOKEN_SCORING_METHODS)),
+              help='How tokens are ranked: total occurrences (frequency) or number of '
+                   'documents containing them (document_frequency).')
+@click.option('--output-path', required=True, help='Path to save the pruned model and tokenizer.')
+@click.option('--device', default='auto',
+              help='Device to use for computation (auto, cpu, cuda, cuda:0, etc.)')
+@click.option('--dtype', default='auto',
+              type=click.Choice(['auto', 'float32', 'float16', 'bfloat16']),
+              help='Data type to load the model with.')
+@click.option('--trust-remote-code/--no-trust-remote-code', default=False,
+              help='Allow custom model code from the Hub when loading.')
+@click.option('--verbose/--quiet', default=True, help='Whether to show verbose output.')
+def prune_vocab(model_path, calibration_data, split, text_field, keep_top_k,
+                token_selection_method, output_path, device, dtype, trust_remote_code, verbose):
+    """Prune a model's vocabulary to the tokens used by a calibration corpus."""
+    log_level = logging.INFO if verbose else logging.WARNING
+    logging.basicConfig(level=log_level, format='%(message)s')
+
+    dataset = _load_calibration_data(calibration_data, split)
+
+    device, dtype = _resolve_device_dtype(device, dtype)
+    logger.info(f"Loading model from {model_path} to {device} with {dtype}")
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=dtype,
+            device_map=device,
+            trust_remote_code=trust_remote_code,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=trust_remote_code)
+    except Exception as e:
+        logger.error(f"Error loading model: {str(e)}")
+        raise
+
+    logger.info(
+        f"Pruning vocabulary: keeping top {keep_top_k} tokens by {token_selection_method} "
+        "plus special/byte tokens"
+    )
+    original_params = count_parameters(model)
+    original_vocab_size = model.get_input_embeddings().weight.shape[0]
+    try:
+        pruned_model, new_tokenizer, new2old = prune_model_vocab(
+            model=model,
+            tokenizer=tokenizer,
+            calibration_dataset=dataset,
+            keep_top_k=keep_top_k,
+            token_selection_method=token_selection_method,
+            text_field=text_field,
+            show_progress=verbose,
+        )
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+    stats = get_vocab_pruning_statistics(original_params, original_vocab_size, pruned_model)
+
+    logger.info("Pruning complete!")
+    logger.info(
+        f"Vocabulary: {stats['original_vocab_size']:,} -> {stats['pruned_vocab_size']:,} tokens"
+    )
+    logger.info(f"Original parameters: {stats['original_parameters']:,}")
+    logger.info(f"Pruned parameters: {stats['pruned_parameters']:,}")
+    logger.info(
+        f"Reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)"
+    )
+
+    logger.info(f"Saving pruned model to {output_path}")
+    save_vocab_pruned(pruned_model, new_tokenizer, new2old, output_path, keep_top_k=keep_top_k)
     logger.info("Done!")
 
 @cli.command()

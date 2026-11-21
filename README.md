@@ -130,6 +130,27 @@ model = opf.prune_model(
 
 ---
 
+### Vocabulary Pruning — Drop tokens your domain never uses
+Shrinks the embedding table (and an untied `lm_head`) to the tokens a calibration corpus actually uses, plus all special tokens and byte tokens, so any input stays encodable. Works with fast BPE tokenizers. Token ids change, so the pruned model must be used with the returned tokenizer.
+
+```python
+model, tokenizer, new2old = opf.prune_model_vocab(
+    model,
+    tokenizer,
+    calibration_dataset=domain_texts,  # list of str / dict rows, or a datasets.Dataset
+    keep_top_k=8192,                   # most frequent tokens kept beyond specials + bytes
+)
+opf.save_vocab_pruned(model, tokenizer, new2old, "./pruned-vocab")  # also writes vocab_mapping.json
+```
+
+Tokens are ranked by `token_selection_method`: `"frequency"` (default, total occurrences), `"document_frequency"` (number of documents containing the token), or your own callable `(VocabScoringContext) -> Dict[int, float]` (higher is kept first). Special, byte and merge-ancestor tokens are always kept, whatever the method.
+
+From the CLI: `optipfair prune-vocab --model-path <model> --calibration-data data.jsonl --keep-top-k 8192 --output-path ./pruned-vocab`.
+
+> `distill_model` does not yet support a vocab-pruned student with a full-vocabulary teacher.
+
+---
+
 ### Combining Both
 Apply depth pruning first to eliminate the weakest layers, then width pruning to fine-tune the remaining ones.
 
