@@ -1,9 +1,38 @@
 ## [Unreleased]
 
-- Fixed the skewed logits loss using symmetric numerical stabilization, avoiding a
-  vocabulary-size-dependent negative offset, and detached teacher logits for direct
-  calls to `compute_distillation_loss()`.
-- Prevented overflow in the differentiable zero task loss for all-masked batches.
+## [0.5.1] - 2026-11-23
+
+### ✨ New Features
+
+- Added an explicit `layer_map` option to `distill_model()` for aligning student
+  blocks with their original teacher blocks after non-uniform depth pruning (#57).
+- Added an optional optimizer-step callback to `distill_model()` for checkpointing,
+  logging, evaluation, and clean early stopping (#52).
+
+### 🔧 Bug Fixes
+
+- Disabled generation caches during read-only layer-importance analysis and
+  calibration forward passes (#44).
+- Corrected the `expansion_divisor` documentation: intermediate sizes round down
+  to the largest valid multiple (#45).
+- Excluded padded tokens from data-driven activation norms and made norm
+  accumulation independent of calibration batch partitioning (#46).
+- Resolved decoder depth through nested text configurations and disabled/restored
+  cache settings on both top-level and text configs during distillation (#47, #48).
+- Selected unmasked token positions before computing the logits loss, and made
+  teacher logits gradient-free (#50, #53).
+- Used symmetric numerical stabilization in the logits loss and prevented
+  overflow in the differentiable zero task loss for all-masked batches (#53).
+- Passed only trainable student parameters to AdamW (#50).
+
+### 📚 Documentation
+
+- Documented dictionary-batch `labels`, per-step callbacks, explicit layer
+  mappings, and caller-controlled trainable parameters in the reference manual
+  (#50, #51, #52, #57).
+- Documented that full-parameter distillation can exceed available GPU memory;
+  freezing parameters or using PEFT can reduce memory, but no fit is guaranteed
+  for a particular model and device (#49, #50).
 
 ---
 

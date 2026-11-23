@@ -46,6 +46,12 @@ This document outlines the planned features and improvements for OptiPFair.
 - **Uniform Width Pruning**: Selective width pruning is rejected because the model configuration cannot represent different intermediate sizes across layers. Use depth pruning or `zero_neurons_mlp()` for layer-specific changes.
 - **Visualization Fixes**: Bias plots support bfloat16 activations, and hook cleanup messages are logged at DEBUG level.
 
+### Version 0.5.1 (Released - November 2026) ✅
+- **Pruning Analysis**: Read-only analyses disable generation caches; data-driven activation norms ignore padding and are independent of calibration batch partitioning.
+- **Distillation**: Supports explicit teacher-layer mappings, optimizer-step callbacks with early stopping, nested multimodal text configs, and training only caller-selected parameters.
+- **Memory and Loss**: Computes logits loss only on valid positions and documents GPU memory limits for full-parameter distillation.
+- **Documentation**: Clarifies label handling, callback behavior, and downward `expansion_divisor` rounding.
+
 ### Version 1.0.0
 - **Distributed Pruning**: Support for pruning very large models across multiple GPUs
 - **Dynamic Pruning**: Techniques for runtime pruning based on inference context

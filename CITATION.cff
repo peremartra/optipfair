@@ -2,14 +2,14 @@ cff-version: 1.2.0
 message: "If you use OptiPFair in your research, please cite it using the metadata below."
 type: software
 title: "OptiPFair: Structured Pruning and Knowledge Distillation for Large Language Models"
-version: 0.4.0
+version: 0.5.1
 authors:
   - family-names: Martra
     given-names: Pere
 repository-code: "https://github.com/peremartra/optipfair"
 url: "https://peremartra.github.io/optipfair/"
 license: Apache-2.0
-date-released: "2025-01-01"
+date-released: "2026-11-23"
 doi: "10.5281/zenodo.20473491"
 abstract: >
   OptiPFair is an open-source Python library for structured pruning and

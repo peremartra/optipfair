@@ -2,6 +2,15 @@
 
 Designed to be used with you favourite LLM (ChatGPT / Claude / Gemini / Cursor / Windsurf). Just drop this file into your prompt or LLM Project and start building Optimized LLMs
 
+## Version 0.5.1 Release Notes
+
+- Read-only layer analysis and calibration disable generation caches when the model supports `use_cache`.
+- Data-driven activation norms exclude padding and accumulate consistently across calibration batches.
+- `expansion_divisor` rounds intermediate sizes down to the largest multiple not exceeding the target.
+- `distill_model` supports explicit teacher `layer_map` mappings, optimizer-step callbacks, and caller-selected trainable parameters. Dictionary batches may provide `labels`; positions marked `-100` are ignored by all loss components.
+- The logits loss selects valid positions before softmax and does not backpropagate through teacher logits. Cache settings are disabled and restored for nested multimodal text configurations.
+- Full-parameter distillation may exceed available GPU memory. Freezing parameters or using PEFT can reduce memory use, but the library does not guarantee that a given model fits a particular device; it does not provide gradient checkpointing or memory-efficient optimizers.
+
 ## Overview
 
 OptiPFair is a Python library for structured pruning of large language models, with a primary focus on GLU architectures. It also provides built-in functionality for bias visualization and analysis. This guide provides comprehensive information on using all of OptiPFair's features.
