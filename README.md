@@ -161,6 +161,20 @@ pip install optipfair
 pip install optipfair[viz]
 ```
 
+### Hardware
+
+Runs on NVIDIA GPUs (CUDA), Apple Silicon GPUs (MPS / Metal) and CPU. Load your model with
+`optipfair.get_device()` and every pruning, analysis and distillation step runs there:
+
+```python
+device = opf.get_device()  # CUDA -> MPS -> CPU; override with OPTIPFAIR_DEVICE=cpu|mps|cuda
+model = AutoModelForCausalLM.from_pretrained(
+    model_id, torch_dtype=opf.get_default_dtype(device), device_map=str(device)
+)
+```
+
+The CLI takes `--device auto|cuda|mps|cpu`.
+
 ---
 
 ## Notebooks

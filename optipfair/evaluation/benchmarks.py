@@ -11,6 +11,8 @@ import time
 import torch
 from transformers import PreTrainedModel, AutoTokenizer
 
+from ..device import synchronize
+
 logger = logging.getLogger(__name__)
 
 def time_inference(
@@ -50,14 +52,17 @@ def time_inference(
     # Timed runs
     times = []
     for _ in range(num_runs):
-        start_time = time.time()
+        # GPU work (CUDA/MPS) is asynchronous: drain the queue before reading the clock.
+        synchronize(model.device)
+        start_time = time.perf_counter()
         with torch.no_grad():
             output = model.generate(
                 inputs.input_ids,
                 max_new_tokens=max_new_tokens,
                 do_sample=False,
             )
-        end_time = time.time()
+        synchronize(model.device)
+        end_time = time.perf_counter()
         times.append(end_time - start_time)
     
     generated_tokens = output.size(1) - inputs.input_ids.size(1)

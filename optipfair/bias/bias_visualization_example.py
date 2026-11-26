@@ -6,14 +6,14 @@ by comparing activation patterns between pairs of prompts that differ
 only in demographic attributes.
 """
 
-import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from optipfair.bias import visualize_bias, visualize_pca
+from optipfair.device import get_default_dtype, get_device
 import os
 
 def main():
-    # Check if CUDA is available
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Pick CUDA, Apple Silicon (MPS) or CPU; override with OPTIPFAIR_DEVICE=<device>
+    device = str(get_device())
     print(f"Using device: {device}")
     
     # Model to analyze
@@ -28,7 +28,7 @@ def main():
     # Load model and tokenizer with optimizations for memory usage
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.float16,  # Use float16 for memory efficiency
+        torch_dtype=get_default_dtype(device),  # Half precision on GPUs, float32 on CPU
         device_map=device
     )
     tokenizer = AutoTokenizer.from_pretrained(model_name)

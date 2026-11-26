@@ -111,6 +111,48 @@ optipfair prune \
 optipfair analyze --model-path meta-llama/Llama-3.2-1B
 ```
 
+## Device Selection (CUDA, Apple Silicon, CPU)
+
+OptiPFair runs on NVIDIA GPUs (`cuda`), Apple Silicon GPUs (`mps`, via Metal) and CPU. The
+pruning, analysis and distillation functions run on the device the model is already on, so you
+only choose a device when loading the model. `get_device()` does that for you:
+
+```python
+from transformers import AutoModelForCausalLM
+from optipfair import get_device, get_default_dtype
+
+device = get_device()                # CUDA -> MPS -> CPU
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-3.2-1B",
+    torch_dtype=get_default_dtype(device),
+    device_map=str(device),
+)
+```
+
+| Helper | Description |
+|--------|-------------|
+| `get_device(device=None)` | Resolve `None`/`"auto"` to the best backend, or validate an explicit `"cuda"`, `"cuda:1"`, `"mps"` or `"cpu"`. An explicitly requested backend that is unavailable raises `RuntimeError` instead of silently falling back to CPU. |
+| `get_default_dtype(device=None)` | `bfloat16` on Ampere+ CUDA, `float16` on older CUDA, `bfloat16` on MPS (macOS 14+, else `float32`), `float32` on CPU. |
+| `empty_cache(device=None)` | Release cached allocator memory on CUDA or MPS. |
+| `synchronize(device=None)` | Wait for queued GPU work (needed before reading timers). |
+| `memory_allocated(device=None)` | Bytes currently allocated on CUDA or MPS (`None` on CPU). |
+
+The `OPTIPFAIR_DEVICE` environment variable overrides automatic selection everywhere `auto` is
+used, including the CLI. For example, to force CPU on a machine with a GPU:
+
+```bash
+OPTIPFAIR_DEVICE=cpu optipfair analyze --model-path meta-llama/Llama-3.2-1B
+```
+
+The CLI accepts the same values: `--device auto` (default), `--device cuda`, `--device mps` or
+`--device cpu`. With `--dtype auto`, the dtype follows `get_default_dtype()`.
+
+!!! note "Apple Silicon notes"
+    - Unified memory is shared with the system, so the usable model size depends on total RAM.
+    - CUDA-only libraries (`bitsandbytes` quantization, `vllm`, `flash-attn`) are not available
+      on MPS; these are outside OptiPFair but common in surrounding workflows.
+    - If a PyTorch operator is missing on MPS, `PYTORCH_ENABLE_MPS_FALLBACK=1` runs it on CPU.
+
 ## Neuron Selection Methods
 
 OptiPFair supports four methods for calculating neuron importance:
@@ -364,7 +406,7 @@ pruned = prune_model(model, neuron_selection_method="MAW", dataloader=dl)  # PPM
 1. **Use FP16/BF16:** Load model with `torch_dtype=torch.float16` for faster calibration
 2. **Shuffle Data:** Shuffle calibration dataloader for better representation
 3. **Cache Dataset:** Pre-tokenize and cache your calibration dataset
-4. **Monitor VRAM:** Use `torch.cuda.empty_cache()` if needed
+4. **Monitor VRAM:** Use `optipfair.empty_cache()` if needed (works on CUDA and Apple Silicon)
 ```python
 # Optimized example
 model = AutoModelForCausalLM.from_pretrained(

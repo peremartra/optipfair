@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### ✨ New Features
+
+- Added Apple Silicon (MPS / Metal) support alongside CUDA and CPU. New `optipfair.device`
+  helpers (`get_device`, `get_default_dtype`, `empty_cache`, `synchronize`,
+  `memory_allocated`, `is_mps_available`) are exported from the package root.
+- `get_device()` / `--device auto` now picks CUDA, then MPS, then CPU, and honours the new
+  `OPTIPFAIR_DEVICE` environment variable. Explicitly requesting an unavailable backend now
+  fails with a clear error instead of falling back to CPU.
+- CLI `--dtype auto` now selects `bfloat16` on MPS (macOS 14+) instead of `float32`.
+
+### 🔧 Bug Fixes
+
+- Calibration for data-driven width pruning now releases cached memory on MPS as well as
+  CUDA.
+- `time_inference()` synchronizes the GPU (CUDA/MPS) before reading the clock and uses
+  `time.perf_counter()`, so asynchronous kernels are included in measured latency.
+
 ## [0.5.1] - 2026-11-23
 
 ### ✨ New Features
