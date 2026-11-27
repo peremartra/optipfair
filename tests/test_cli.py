@@ -76,6 +76,50 @@ class TestCLI(unittest.TestCase):
     @patch('optipfair.cli.commands.AutoModelForCausalLM')
     @patch('optipfair.cli.commands.AutoTokenizer')
     @patch('optipfair.cli.commands.prune_model')
+    def test_prune_command_depth_saves_model(
+        self, mock_prune_model, mock_tokenizer, mock_model_class
+    ):
+        """Test DEPTH pruning, whose statistics have no MLP-only keys such as expansion_rate."""
+        mock_model_class.from_pretrained.return_value = MagicMock()
+        mock_tokenizer_instance = MagicMock()
+        mock_tokenizer.from_pretrained.return_value = mock_tokenizer_instance
+
+        pruned_model = MagicMock()
+        # Keys returned by get_depth_pruning_statistics()
+        stats = {
+            "original_parameters": 1_000_000,
+            "pruned_parameters": 900_000,
+            "reduction": 100_000,
+            "percentage_reduction": 10.0,
+            "original_layer_count": 30,
+            "final_layer_count": 28,
+            "layers_removed": 2,
+            "layer_reduction_percentage": 6.67,
+        }
+        mock_prune_model.return_value = (pruned_model, stats)
+
+        logs_cm = self.assertLogs('optipfair.cli.commands', level='INFO')
+        with patch('os.makedirs'), logs_cm as logs:
+            result = self.runner.invoke(prune, [
+                '--model-path', 'test-model',
+                '--pruning-type', 'DEPTH',
+                '--num-layers-to-remove', '2',
+                '--output-path', './test-output',
+                '--device', 'cpu',
+            ])
+
+        self.assertEqual(
+            result.exit_code, 0, msg=f"Command failed with: {result.output}{result.exception!r}"
+        )
+        self.assertEqual(mock_prune_model.call_args.kwargs['pruning_type'], 'DEPTH')
+        expected = "Removed layers: 2 of 30 (28 remaining)"
+        self.assertTrue(any(expected in line for line in logs.output))
+        pruned_model.save_pretrained.assert_called_once_with('./test-output')
+        mock_tokenizer_instance.save_pretrained.assert_called_once_with('./test-output')
+
+    @patch('optipfair.cli.commands.AutoModelForCausalLM')
+    @patch('optipfair.cli.commands.AutoTokenizer')
+    @patch('optipfair.cli.commands.prune_model')
     def test_prune_command_expansion_divisor_passthrough(self, mock_prune_model, mock_tokenizer, mock_model_class):
         """Test that --expansion-divisor is passed to prune_model for MLP_GLU."""
         mock_model = MagicMock()

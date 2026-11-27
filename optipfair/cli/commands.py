@@ -200,11 +200,15 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
     logger.info(f"Pruned parameters: {stats['pruned_parameters']:,}")
     logger.info(f"Reduction: {stats['reduction']:,} parameters ({stats['percentage_reduction']:.2f}%)")
     
-    if stats['expansion_rate'] is not None:
+    # MLP_GLU and DEPTH pruning return different statistics keys.
+    if stats.get('expansion_rate') is not None:
         logger.info(f"Final expansion rate: {stats['expansion_rate']:.2f}%")
     
-    if 'pruned_layers' in stats and 'total_layers' in stats:
-        logger.info(f"Pruned layers: {stats['pruned_layers']} of {stats['total_layers']}")
+    if 'layers_removed' in stats and 'original_layer_count' in stats:
+        logger.info(
+            f"Removed layers: {stats['layers_removed']} of {stats['original_layer_count']} "
+            f"({stats['final_layer_count']} remaining)"
+        )
     
     # Create output directory if it doesn't exist
     os.makedirs(output_path, exist_ok=True)
