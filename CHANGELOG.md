@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### 🔧 Bug Fixes
+
+- Fixed `optipfair prune --pruning-type DEPTH` crashing with `KeyError: 'expansion_rate'`
+  before saving the pruned model; the CLI now logs the number of layers removed (#60).
+
 ## [0.5.1] - 2026-11-23
 
 ### ✨ New Features
