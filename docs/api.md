@@ -834,6 +834,49 @@ def get_pruning_statistics(
     """
 ```
 
+## Device Module
+
+Helpers for running on NVIDIA GPUs (CUDA), Apple Silicon GPUs (MPS) or CPU. All are exported
+from the package root (`optipfair.get_device`, ...). See
+[Device Selection](usage.md#device-selection-cuda-apple-silicon-cpu) for a walkthrough.
+
+### `get_device`
+
+```python
+def get_device(device: Union[str, torch.device, None] = None) -> torch.device:
+    """
+    Resolve a device specification to a torch.device.
+
+    Args:
+        device: None or "auto" to pick the best available backend (CUDA, then MPS, then CPU,
+            honouring the OPTIPFAIR_DEVICE environment variable), or an explicit device such
+            as "cuda", "cuda:1", "mps" or "cpu".
+
+    Raises:
+        RuntimeError: If an explicitly requested backend is not available.
+        ValueError: If the device string is not recognised by PyTorch.
+    """
+```
+
+### `get_default_dtype`
+
+```python
+def get_default_dtype(device: Union[str, torch.device, None] = None) -> torch.dtype:
+    """
+    bfloat16 on Ampere+ CUDA, float16 on older CUDA, bfloat16 on MPS (macOS 14+, otherwise
+    float32) and float32 on CPU.
+    """
+```
+
+### `empty_cache` / `synchronize` / `memory_allocated` / `is_mps_available`
+
+```python
+def empty_cache(device=None) -> None            # release cached CUDA/MPS allocator memory
+def synchronize(device=None) -> None            # wait for queued CUDA/MPS kernels
+def memory_allocated(device=None) -> Optional[int]  # bytes allocated (None on CPU)
+def is_mps_available() -> bool                  # Apple Silicon backend usable?
+```
+
 ## Evaluation Module
 
 ### `time_inference`

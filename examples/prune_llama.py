@@ -4,12 +4,12 @@ Example script demonstrating how to prune a LLaMA model using OptiPFair.
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from optipfair import prune_model
+from optipfair import get_default_dtype, get_device, prune_model
 from optipfair.evaluation.benchmarks import time_inference
 
 # Configuration
 MODEL_NAME = "meta-llama/Llama-3.2-1B"  # Change to your model
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = str(get_device())  # CUDA, Apple Silicon (MPS) or CPU; override with OPTIPFAIR_DEVICE
 PRUNING_PERCENTAGE = 20
 OUTPUT_PATH = "./pruned-llama"
 TEST_PROMPT = "Paris is the capital of"
@@ -20,7 +20,7 @@ def main():
     # Load model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
-        torch_dtype=torch.float16 if "cuda" in DEVICE else torch.float32,
+        torch_dtype=get_default_dtype(DEVICE),
         device_map=DEVICE
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)

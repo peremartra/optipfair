@@ -17,6 +17,15 @@ from .distillation.mapping import (
     MAPPING_LAST,
 )
 
+from .device import (
+    get_device,
+    get_default_dtype,
+    is_mps_available,
+    empty_cache,
+    synchronize,
+    memory_allocated,
+)
+
 from .pruning.utils import (
     get_pruning_statistics,
     get_depth_pruning_statistics,

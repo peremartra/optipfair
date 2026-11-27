@@ -11,9 +11,24 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
 from .. import prune_model
+from ..device import DEVICE_ENV_VAR, get_default_dtype, get_device
 from ..pruning.utils import count_parameters
 
 logger = logging.getLogger(__name__)
+
+DEVICE_HELP = (
+    "Device to use for computation (auto, cpu, cuda, cuda:0, mps, etc.). "
+    f"'auto' honours ${DEVICE_ENV_VAR}, then picks CUDA, then MPS (Apple Silicon), then CPU."
+)
+
+
+def _resolve_device(device):
+    """Resolve the --device option, reporting unavailable backends as CLI usage errors."""
+    try:
+        return get_device(device)
+    except (RuntimeError, ValueError) as exc:
+        raise click.BadParameter(str(exc), param_hint="'--device'") from exc
+
 
 @click.group()
 def cli():
@@ -39,7 +54,7 @@ def cli():
 @click.option('--layer-selection-method', default='last', type=click.Choice(['last', 'first', 'custom']), 
               help='Method for selecting layers to remove (DEPTH only).')
 @click.option('--output-path', required=True, help='Path to save the pruned model.')
-@click.option('--device', default='auto', help='Device to use for computation (auto, cpu, cuda, cuda:0, etc.)')
+@click.option('--device', default='auto', help=DEVICE_HELP)
 @click.option('--dtype', default='auto', type=click.Choice(['auto', 'float32', 'float16', 'bfloat16']), 
               help='Data type to load the model with.')
 @click.option('--verbose/--quiet', default=True, help='Whether to show verbose output.')
@@ -110,18 +125,11 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
         pruning_percentage = None  # Clear for MLP compatibility
     
     # Determine device
-    if device == 'auto':
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = str(_resolve_device(device))
     
     # Determine dtype
     if dtype == 'auto':
-        if 'cuda' in device and torch.cuda.is_available():
-            if torch.cuda.get_device_capability()[0] >= 8:  # Ampere or newer
-                dtype = torch.bfloat16
-            else:
-                dtype = torch.float16
-        else:
-            dtype = torch.float32
+        dtype = get_default_dtype(device)
     else:
         dtype_map = {
             'float32': torch.float32,
@@ -218,15 +226,14 @@ def prune(model_path, pruning_type, method, pruning_percentage, expansion_rate,
 
 @cli.command()
 @click.option('--model-path', required=True, help='Path or identifier of the model to analyze.')
-@click.option('--device', default='auto', help='Device to use for computation (auto, cpu, cuda, cuda:0, etc.)')
+@click.option('--device', default='auto', help=DEVICE_HELP)
 def analyze(model_path, device):
     """Analyze a model's architecture and parameter distribution."""
     # Configure logging
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     
     # Determine device
-    if device == 'auto':
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = str(_resolve_device(device))
     
     logger.info(f"Loading model from {model_path} to {device}")
     

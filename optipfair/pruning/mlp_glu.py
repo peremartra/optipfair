@@ -13,6 +13,7 @@ from typing import Tuple, Dict, List, Optional, Callable, Union, Any
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
+from ..device import empty_cache
 from .utils import (
     _supports_forward_kwarg,
     validate_model_for_glu_pruning,
@@ -65,8 +66,7 @@ def setup_mlp_hooks_for_importance(
     
     # Free memory before starting calibration
     gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    empty_cache(device)
     
     handles = []
     
@@ -228,8 +228,7 @@ def run_calibration_forward_passes(
             
             # Periodic memory cleanup to avoid OOM
             if (batch_idx + 1) % 10 == 0:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                empty_cache(device)
     
     logger.info(f"Completed calibration over {len(dataloader)} batches")
 
