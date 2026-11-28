@@ -39,6 +39,9 @@ def _tiny_llama():
         num_key_value_heads=2,
         max_position_embeddings=64,
         tie_word_embeddings=False,
+        # GQA + SDPA without an attention mask uses enable_gqa=True, which aborts on MPS with
+        # torch 2.6 ("mps.matmul ... Failed to infer result type"). Eager keeps GQA coverage.
+        attn_implementation="eager",
     )
     torch.manual_seed(0)
     return LlamaForCausalLM(config).eval()

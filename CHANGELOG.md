@@ -4,7 +4,8 @@
 
 - Added Apple Silicon (MPS / Metal) support alongside CUDA and CPU. New `optipfair.device`
   helpers (`get_device`, `get_default_dtype`, `empty_cache`, `synchronize`,
-  `memory_allocated`, `is_mps_available`) are exported from the package root.
+  `memory_allocated`, `is_mps_available`) are exported from the package root. All of them
+  accept `None`, `""` and `"auto"`; `synchronize("cuda:1")` synchronizes that specific GPU.
 - `get_device()` / `--device auto` now picks CUDA, then MPS, then CPU, and honours the new
   `OPTIPFAIR_DEVICE` environment variable. Explicitly requesting an unavailable backend now
   fails with a clear error instead of falling back to CPU.

@@ -114,12 +114,22 @@ def get_default_dtype(device: DeviceLike = None) -> torch.dtype:
     return torch.float32
 
 
-def _device_type(device: DeviceLike) -> Optional[str]:
+def _target_device(device: DeviceLike) -> Optional[torch.device]:
+    """
+    Resolve the ``device`` argument of :func:`empty_cache` and :func:`synchronize`.
+
+    ``None`` means every available backend. ``""`` and ``"auto"`` resolve through
+    :func:`get_device`, so they honour ``OPTIPFAIR_DEVICE`` and target the backend it would pick.
+    Explicit devices are only parsed, not checked for availability, so for example
+    ``empty_cache("cuda")`` on a Mac stays a no-op instead of raising.
+    """
     if device is None:
         return None
     if isinstance(device, torch.device):
-        return device.type
-    return torch.device(device).type
+        return device
+    if device.strip().lower() in ("", AUTO_DEVICE):
+        return get_device(device)
+    return torch.device(device.strip().lower())
 
 
 def empty_cache(device: DeviceLike = None) -> None:
@@ -127,10 +137,12 @@ def empty_cache(device: DeviceLike = None) -> None:
     Release cached allocator memory back to the system.
 
     Args:
-        device: Device whose cache should be released. If ``None``, the caches of every
-            available accelerator backend are released. CPU is a no-op.
+        device: Device whose cache should be released. ``"auto"`` or ``""`` target the device
+            :func:`get_device` would pick. If ``None``, the caches of every available
+            accelerator backend are released. CPU is a no-op.
     """
-    device_type = _device_type(device)
+    target = _target_device(device)
+    device_type = target.type if target is not None else None
     if device_type in (None, "cuda") and torch.cuda.is_available():
         torch.cuda.empty_cache()
     if device_type in (None, "mps") and is_mps_available() and hasattr(torch, "mps"):
@@ -145,12 +157,15 @@ def synchronize(device: DeviceLike = None) -> None:
     reading the clock.
 
     Args:
-        device: Device to synchronize. If ``None``, every available accelerator backend is
-            synchronized. CPU is a no-op.
+        device: Device to synchronize, e.g. ``"cuda:1"``. ``"auto"`` or ``""`` target the device
+            :func:`get_device` would pick. If ``None``, every available accelerator backend is
+            synchronized (CUDA: the current device). CPU is a no-op.
     """
-    device_type = _device_type(device)
+    target = _target_device(device)
+    device_type = target.type if target is not None else None
     if device_type in (None, "cuda") and torch.cuda.is_available():
-        torch.cuda.synchronize()
+        # Pass the device through so an indexed device ("cuda:1") synchronizes that GPU.
+        torch.cuda.synchronize(target)
     if device_type in (None, "mps") and is_mps_available() and hasattr(torch, "mps"):
         torch.mps.synchronize()
 

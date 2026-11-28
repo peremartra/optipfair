@@ -134,6 +134,12 @@ class TestDefaultDtype(unittest.TestCase):
 class TestBackendDispatch(unittest.TestCase):
     """empty_cache / synchronize only touch the requested backend."""
 
+    def setUp(self):
+        env = patch.dict(os.environ, {}, clear=False)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(DEVICE_ENV_VAR, None)
+
     def _run(self, func, device, cuda=True, mps=True):
         cuda_backend = MagicMock()
         mps_backend = MagicMock()
@@ -167,6 +173,43 @@ class TestBackendDispatch(unittest.TestCase):
 
     def test_memory_allocated_cpu_is_none(self):
         self.assertIsNone(memory_allocated("cpu"))
+
+    def test_auto_and_empty_target_the_auto_device(self):
+        for func in (empty_cache, synchronize):
+            for spec in ("auto", " AUTO ", ""):
+                with self.subTest(func=func.__name__, spec=spec):
+                    self.assertEqual(self._run(func, spec), (True, False))
+                    self.assertEqual(self._run(func, spec, cuda=False), (False, True))
+                    self.assertEqual(self._run(func, spec, cuda=False, mps=False), (False, False))
+
+    def test_none_still_targets_every_available_backend(self):
+        for func in (empty_cache, synchronize):
+            with self.subTest(func=func.__name__):
+                self.assertEqual(self._run(func, None), (True, True))
+
+    def test_auto_honours_env_var(self):
+        with patch.dict(os.environ, {DEVICE_ENV_VAR: "cpu"}):
+            for func in (empty_cache, synchronize):
+                with self.subTest(func=func.__name__):
+                    self.assertEqual(self._run(func, "auto"), (False, False))
+
+    def test_explicit_unavailable_backend_is_noop(self):
+        for func in (empty_cache, synchronize):
+            with self.subTest(func=func.__name__):
+                self.assertEqual(self._run(func, "cuda", cuda=False), (False, False))
+
+    def test_synchronize_passes_cuda_device_index(self):
+        cuda_sync = MagicMock()
+        with patch.object(torch.cuda, "is_available", return_value=True), patch.object(
+            device_mod, "is_mps_available", return_value=False
+        ), patch.object(torch.cuda, "synchronize", cuda_sync):
+            synchronize("cuda:1")
+            synchronize(torch.device("cuda", 2))
+            synchronize(None)
+        self.assertEqual(
+            [c.args[0] for c in cuda_sync.call_args_list],
+            [torch.device("cuda:1"), torch.device("cuda:2"), None],
+        )
 
 
 class TestCLIDevice(unittest.TestCase):

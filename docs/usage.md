@@ -133,8 +133,8 @@ model = AutoModelForCausalLM.from_pretrained(
 |--------|-------------|
 | `get_device(device=None)` | Resolve `None`/`"auto"` to the best backend, or validate an explicit `"cuda"`, `"cuda:1"`, `"mps"` or `"cpu"`. An explicitly requested backend that is unavailable raises `RuntimeError` instead of silently falling back to CPU. |
 | `get_default_dtype(device=None)` | `bfloat16` on Ampere+ CUDA, `float16` on older CUDA, `bfloat16` on MPS (macOS 14+, else `float32`), `float32` on CPU. |
-| `empty_cache(device=None)` | Release cached allocator memory on CUDA or MPS. |
-| `synchronize(device=None)` | Wait for queued GPU work (needed before reading timers). |
+| `empty_cache(device=None)` | Release cached allocator memory on CUDA or MPS. `None` releases every available backend; `"auto"` targets the device `get_device()` would pick. |
+| `synchronize(device=None)` | Wait for queued GPU work (needed before reading timers). Accepts the same values as `empty_cache`, including indexed devices such as `"cuda:1"`. |
 | `memory_allocated(device=None)` | Bytes currently allocated on CUDA or MPS (`None` on CPU). |
 
 The `OPTIPFAIR_DEVICE` environment variable overrides automatic selection everywhere `auto` is
